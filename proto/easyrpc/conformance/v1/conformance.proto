@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package easyrpc.conformance.v1;
+
+option go_package = "github.com/easy-utils/easy-rpc-go/conformance/v1;conformancev1";
+import "google/api/annotations.proto";
+
+message EchoRequest { string input = 1; }
+message EchoResponse { string output = 1; }
+
+message CountRequest { int32 count = 1; }
+message CountResponse { int32 index = 1; }
+
+message FailRequest { string message = 1; }
+message FailResponse { bool ok = 1; }
+
+message HealthRequest {}
+message HealthResponse { bool ok = 1; string name = 2; }
+
+service ConformanceService {
+  rpc Health(HealthRequest) returns (HealthResponse) {
+    option (google.api.http) = { get: "/v1/health" };
+  }
+
+  rpc Echo(EchoRequest) returns (EchoResponse) {
+    option (google.api.http) = { post: "/v1/echo" body: "*" };
+  }
+
+  rpc Count(CountRequest) returns (stream CountResponse) {
+    option (google.api.http) = { post: "/v1/count" body: "*" };
+  }
+
+  rpc Fail(FailRequest) returns (FailResponse) {
+    option (google.api.http) = { post: "/v1/fail" body: "*" };
+  }
+}

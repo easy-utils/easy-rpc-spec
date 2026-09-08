@@ -1,0 +1,13 @@
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+  except:
+    - PACKAGE_VERSION_SUFFIX
+    - PACKAGE_SAME_GO_PACKAGE
+    - DIRECTORY_SAME_PACKAGE
+breaking:
+  use:
+    - FILE
