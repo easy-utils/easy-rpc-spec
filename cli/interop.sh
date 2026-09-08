@@ -7,6 +7,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GO="$ROOT/../easy-rpc-go"
 TS="$ROOT/../easy-rpc-ts"
 RUST="$ROOT/../easy-rpc-rust"
+PYTHON="$ROOT/../easy-rpc-python"
 PORT=18888
 BIN=/tmp/opencode/conformance-server
 LOG=/tmp/opencode/conformance-server.log
@@ -30,3 +31,6 @@ echo "[interop] TS client..."
 
 echo "[interop] Rust client..."
 ( cd "$RUST" && cargo test --test interop )
+
+echo "[interop] Python client..."
+( cd "$PYTHON" && python3 tests/interop.py )
