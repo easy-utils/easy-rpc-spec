@@ -11,6 +11,7 @@ PYTHON="$ROOT/../easy-rpc-python"
 DART="$ROOT/../easy-rpc-dart"
 KOTLIN="$ROOT/../easy-rpc-kotlin"
 CSHARP="$ROOT/../easy-rpc-csharp"
+SWIFT="$ROOT/../easy-rpc-swift"
 PORT=18888
 BIN=/tmp/opencode/conformance-server
 LOG=/tmp/opencode/conformance-server.log
@@ -46,3 +47,6 @@ echo "[interop] Kotlin client..."
 
 echo "[interop] C# client..."
 ( cd "$CSHARP" && dotnet test tests/tests.csproj )
+
+echo "[interop] Swift client..."
+( cd "$SWIFT" && swift test )
