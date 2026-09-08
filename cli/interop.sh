@@ -1,32 +1,32 @@
 #!/bin/bash
-# Cross-language interop: run the Go conformance server in the background
-# (setsid, detached) then run the TS generated-client tests against it, then
-# stop the server.
+# Cross-language interop: run the Go conformance server (setsid) then run all
+# available language clients against it. Add new languages as they land.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GO="$ROOT/../easy-rpc-go"
 TS="$ROOT/../easy-rpc-ts"
+RUST="$ROOT/../easy-rpc-rust"
 PORT=18888
-LOGFILE="/tmp/opencode/conformance-server.log"
+BIN=/tmp/opencode/conformance-server
+LOG=/tmp/opencode/conformance-server.log
 
 echo "[interop] building go server..."
-( cd "$GO" && go build -o /tmp/opencode/conformance-server ./cmd/conformance-server )
+( cd "$GO" && go build -o "$BIN" ./cmd/conformance-server )
 
 echo "[interop] starting go server (setsid) on :$PORT ..."
 pkill -f conformance-server 2>/dev/null || true
 sleep 0.5
-setsid /tmp/opencode/conformance-server > "$LOGFILE" 2>&1 < /dev/null &
+setsid "$BIN" > "$LOG" 2>&1 < /dev/null &
 sleep 1.2
 
-cleanup() {
-  echo "[interop] stopping go server ..."
-  pkill -f conformance-server 2>/dev/null || true
-}
+cleanup() { echo "[interop] stopping go server..."; pkill -f conformance-server 2>/dev/null || true; }
 trap cleanup EXIT
 
-echo "[interop] server pid: $(pgrep -f conformance-server | head -1)"
-curl -s "http://127.0.0.1:$PORT/v1/health" -o /dev/null -w "health=%{http_code}\n"
+echo "[interop] health=$(curl -s "$HOST/v1/health" -o /dev/null -w '%{http_code}')"
 
-echo "[interop] running TS interop tests..."
+echo "[interop] TS client..."
 ( cd "$TS" && npx vitest run tests/interop.test.ts )
+
+echo "[interop] Rust client..."
+( cd "$RUST" && cargo test --test interop )
