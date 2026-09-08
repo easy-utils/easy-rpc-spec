@@ -9,6 +9,7 @@ TS="$ROOT/../easy-rpc-ts"
 RUST="$ROOT/../easy-rpc-rust"
 PYTHON="$ROOT/../easy-rpc-python"
 DART="$ROOT/../easy-rpc-dart"
+KOTLIN="$ROOT/../easy-rpc-kotlin"
 PORT=18888
 BIN=/tmp/opencode/conformance-server
 LOG=/tmp/opencode/conformance-server.log
@@ -38,3 +39,6 @@ echo "[interop] Python client..."
 
 echo "[interop] Dart client..."
 ( cd "$DART" && dart test test/interop_test.dart )
+
+echo "[interop] Kotlin client..."
+( cd "$KOTLIN" && gradle test --console=plain -q )
