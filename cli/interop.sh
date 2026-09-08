@@ -8,6 +8,7 @@ GO="$ROOT/../easy-rpc-go"
 TS="$ROOT/../easy-rpc-ts"
 RUST="$ROOT/../easy-rpc-rust"
 PYTHON="$ROOT/../easy-rpc-python"
+DART="$ROOT/../easy-rpc-dart"
 PORT=18888
 BIN=/tmp/opencode/conformance-server
 LOG=/tmp/opencode/conformance-server.log
@@ -34,3 +35,6 @@ echo "[interop] Rust client..."
 
 echo "[interop] Python client..."
 ( cd "$PYTHON" && python3 tests/interop.py )
+
+echo "[interop] Dart client..."
+( cd "$DART" && dart test test/interop_test.dart )
