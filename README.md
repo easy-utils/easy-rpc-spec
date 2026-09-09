@@ -156,6 +156,24 @@ Response { status: int, headers: Headers, body: Stream<Bytes>, trailers: Headers
 
 ---
 
+## 7.1 客户端桥接（realm 二选一：std / auto）
+
+每语言暴露两种 client 桥，按"依赖多少"二选一：
+
+- **`realm = std`**（少依赖）：只覆盖 **h1 + h2 + h2c**，不引入任何 QUIC 依赖。
+- **`realm = auto`**（完整功能）：覆盖 **h1 + h2 + h2c + h3**，内部自动协商 `h3 → h2/h2c → h1`，引入 QUIC 依赖。
+
+| 语言 | std（少依赖） | auto（+h3） | 入口 | 备注 |
+|------|--------------|--------------|------|------|
+| **Go** | `net/http`（`http.Protocols`） | `net/http` + `quic-go/http3` | `NewTransport(realm)` | h3 依赖 `github.com/quic-go/quic-go`，可选构建 |
+| **Rust** | `reqwest`（无 http3） | `reqwest`（`http3` feature + `quinn`） | `NewClient(base)` | Cargo feature 切换；h3 需 `RUSTFLAGS=--cfg reqwest_unstable` |
+| **TS** | web=`fetch`；node=`node:http`+`node:http2` | web `fetch` 天然 h1/h2/h3；**node 不支持 h3** | `createDefaultTransport(realm)` | node 仅 h1+h2c+h2；h3 由浏览器 fetch 覆盖 |
+| **Python** | `httpx`（h1+h2/h2c） | `httpx` + `aioquic`（h3） | `default_client(realm)` | h3 依赖 `aioquic`（可选） |
+
+> **移动端说明**：需要 h3 时按平台走系统栈（Android=Cronet、iOS=Cupertino/URLSession），不引自研 QUIC；这些作为 `easy-rpc-<lang>` 的额外 bridge，不影响上面 js/服务器端的 std/auto 分档。
+
+---
+
 ## 8. Conformance（验证）
 
 标准服务定义见 `conformance/`：
@@ -172,3 +190,4 @@ Response { status: int, headers: Headers, body: Stream<Bytes>, trailers: Headers
 
 - 生成器版本锁定在 `cli/` 的脚本与 `buf.gen.*.yaml`（用 `local:` 插件，不用远程）。
 - 各语言产出的 `gen/` 提交进仓库；CI 直接用已提交代码。
+
