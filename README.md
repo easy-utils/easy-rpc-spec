@@ -181,7 +181,35 @@ Response { status: int, headers: Headers, body: Stream<Bytes>, trailers: Headers
 | **TS** | web=`fetch`；node=`node:http`+`node:http2` | web `fetch` 天然 h1/h2/h3；**node 不支持 h3** | `createDefaultTransport(realm)` | node 仅 h1+h2c+h2；h3 由浏览器 fetch 覆盖 |
 | **Python** | `httpx`（h1+h2/h2c） | `httpx` + `aioquic`（h3） | `default_client(realm)` | h3 依赖 `aioquic`（可选） |
 
-> **移动端说明**：需要 h3 时按平台走系统栈（Android=Cronet、iOS=Cupertino/URLSession），不引自研 QUIC；这些作为 `easy-rpc-<lang>` 的额外 bridge，不影响上面 js/服务器端的 std/auto 分档。
+> **客户端桥接说明**：Go/Rust/TS/Python 支持 `realm` 二选一；C#/Kotlin/Swift/Dart 则**拆分多个独立桥，由使用者自选**（不做 realm 自动协商）。各桥协议覆盖见下表。
+
+### 7.1.1 Go / Rust / TS / Python（realm 二选一）
+
+| 语言 | std（h1+h2c+h2） | auto（+h3） | 入口 |
+|------|------------------|-------------|------|
+| **Go** | `net/http`（`http.Protocols`） | `net/http` + `quic-go/http3` | `NewTransport(realm)` |
+| **Rust** | `reqwest`（无 h3） | `reqwest`（`http3` feature + `quinn`） | `NewClient(base)` |
+| **TS** | web=`fetch`；node=`node:http`+`node:http2` | web `fetch` 天然 h1/h2/h3；**node 不支持 h3** | `createDefaultTransport(realm)` |
+| **Python** | `httpx`（h1+h2/h2c） | `httpx` + `aioquic`（h3） | `default_client(realm)` |
+
+### 7.1.2 C# / Kotlin / Swift / Dart（多桥自选）
+
+| 语言 | 桥 | 平台 | 协议 |
+|------|-----|------|------|
+| **C#** | `HttpClientTransport`（`.H1()` `.H2()` `.H3()`） | Linux/桌面/Android/iOS | h1 / h2(https) / h3（System.Net.Http+msquic/平台handler） |
+| **Kotlin** | `OkHttpTransport` | Linux/JVM | h1+h2c+h2 |
+| | `CioTransport` | 非JVM原生（全target） | **仅 h1**（纯Kotlin，最小依赖） |
+| | `CronetTransport` | Android | h1+h2+h3（Cronet） |
+| | `DarwinTransport` | iOS/macOS | h1+h2+h3（NSURLSession） |
+| **Swift** | `URLSessionTransport` | iOS/macOS | h1+h2+h3（系统） |
+| | `AsyncHTTPClientTransport` | Linux/服务端 | h1+h2c+h2（async-http-client） |
+| **Dart** | `Transport`(dart:io) | Linux/VM | h1 |
+| | `Http2Transport` | Linux/VM | h1+h2c+h2（`http2` 包） |
+| | `CronetHttpTransport` | Android | h1+h2+h3（`cronet_http`，Flutter） |
+| | `CupertinoHttpTransport` | iOS/macOS | h1+h2+h3（`cupertino_http`，Flutter） |
+| | `FetchTransport` | Web | h1+h2+h3（`fetch`） |
+
+> **h3 落地原则**：仅系统栈（Cronet/Cupertino/URLSession/浏览器 fetch）与 .NET msquic 提供 h3；Linux 通用默认 h1+h2c+h2（C# 可经 msquic 达 h3）。Cronet/Cupertino 依赖 Flutter SDK，`cronet_http`/`cupertino_http` 不随纯 Dart VM 拉取。
 
 ---
 
