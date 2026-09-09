@@ -90,20 +90,31 @@ v1 无 JSON codec，故不存在 `application/connect+json`。
 
 ## 4. 错误码映射
 
-错误在 HTTP 层表达：
+错误在 HTTP 层表达。覆盖**完整 gRPC/Connect 错误码空间**：
 
-| Connect/GRPC 语义 | HTTP 状态 | 说明 |
-|-------------------|----------|------|
-| 3 invalid_argument | 400 | 参数错误 |
-| 5 not_found | 404 | 资源不存在 |
-| 7 permission_denied | 403 | 权限 |
-| 16 unauthenticated | 401 | 未认证 |
-| 8 resource_exhausted | 429 | 限流 |
-| 13 internal | 500 | 内部错误 |
-| 14 unavailable | 503 | 不可用 |
-| 2 unknown / 其它 | 500 | 兜底 |
+| Code | 名称 | HTTP 状态 | 说明 |
+|------|------|----------|------|
+| 0 | OK | 200 | 成功 |
+| 1 | CANCELLED | 499 | 客户端取消 |
+| 2 | UNKNOWN | 500 | 未知 |
+| 3 | INVALID_ARGUMENT | 400 | 参数无效 |
+| 4 | DEADLINE_EXCEEDED | 504 | 超时 |
+| 5 | NOT_FOUND | 404 | 不存在 |
+| 6 | ALREADY_EXISTS | 409 | 已存在 |
+| 7 | PERMISSION_DENIED | 403 | 无权限 |
+| 8 | RESOURCE_EXHAUSTED | 429 | 资源耗尽 |
+| 9 | FAILED_PRECONDITION | 400 | 前置条件不满足 |
+| 10 | ABORTED | 409 | 中止 |
+| 11 | OUT_OF_RANGE | 400 | 越界 |
+| 12 | UNIMPLEMENTED | 501 | 未实现 |
+| 13 | INTERNAL | 500 | 内部错误 |
+| 14 | UNAVAILABLE | 503 | 不可用 |
+| 15 | DATA_LOSS | 500 | 数据丢失 |
+| 16 | UNAUTHENTICATED | 401 | 未认证 |
 
-- unary：用错误响应头 `connect-code`（数字）+ `connect-error`（消息）+ 对应状态码。
+- **code → HTTP 状态**：权威方向，`httpStatus(code)`/`HTTPStatus(code)` 完整覆盖 1–16。
+- **HTTP 状态 → code**：可变（多对一），返回该状态最常见的 code，`connectFromStatus(status)` 覆盖 400/404/403/401/429/503/409/504/501/499，其余落 `13`。
+- unary：错误响应头 `connect-code`（数字）+ `connect-error`（消息）+ 对应状态码。
 - streaming：结束帧 `EndStreamMessage` 携带错误，或 HTTP 头携带错误 code/状态码。
 
 ---
