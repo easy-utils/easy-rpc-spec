@@ -18,9 +18,9 @@ Linux 无法覆盖的 transport 做了端到端验证。测试端点均在本 po
 | macos-flutter (Flutter/Dart) | `IoTransport`（dart:io） | **TLS**（SecurityContext 注入 CA） | ✅ 3/3 |
 | macos-flutter | `CupertinoHttpTransport` | — | ⚠️ 见下 |
 | macos-xcode (Swift 6.2.4) | `URLSessionTransport` | **TLS + ALPN h2**（delegate 注入 CA，IP SAN 校验） | ✅ echo/count/failDetails |
-| macos-xcode | `URLSessionTransport` | h1 明文（探针） | ✅ HTTP 200 + TLS 套件同栈 |
+| macos-xcode | `URLSessionTransport` | h1 明文 | ✅ echo/count/failDetails |
+| macos-xcode | `AsyncHTTPClientTransport` | h1 明文 | ✅ echo/count/failDetails（初判"容器崩溃"系误诊，见下） |
 | macos-xcode | Swift 协议矩阵 M1–M13 + 故障注入 F1–F6 | — | ✅ 17/17 |
-| macos-xcode | `AsyncHTTPClientTransport` | — | ⚠️ 见下 |
 
 ## 已知环境限制（非库 bug）
 
@@ -42,7 +42,7 @@ Linux 无法覆盖的 transport 做了端到端验证。测试端点均在本 po
 | Kotlin CIO/OkHttp 硬编码 `content-type: application/proto` 覆盖调用方头（JSON codec 全坏） | kotlin **v0.5.4** |
 | Kotlin CIO `openStream` 把 END 帧当 payload 返回、无错误重建、无 finish() | kotlin **v0.5.4** |
 | Dart cupertino transport 不兼容 cupertino_http 3.x（构造器/Uri/statusCode/单值头映射） | dart **v0.5.5** |
-| Swift AHC 测试在沙箱容器崩溃需开关 | swift **v0.5.2** |
+| Swift AHC 测试错误路径缺 shutdown → 进程级 crash | swift **v0.5.3** |
 
 ## 复跑
 
