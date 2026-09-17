@@ -111,6 +111,13 @@ core 内建 `Interceptor`（每语言一致）：包装一次调用，可改请�
 - 内建拦截器：`MetadataInterceptor`（添加固定头）、`TimeoutInterceptor`（附加 `connect-timeout-ms`）。
 - 传输层用 `InterceptorTransport`（或 `interceptors(...)`）包裹；鉴权/重试/日志均以此实现，避免每 transport 手写 wrapper。
 
+## 3.5 压缩（gzip）
+
+- 客户端在请求头 `connect-accept-encoding: gzip` 表示可接受压缩。
+- 服务端对 **>= 1KB（compressMinBytes）** 的流式消息帧做 gzip，置 `flags.bit0=1`。
+- unary 保持 identity（v1）。
+- 客户端收到 bit0=1 的帧必须解压；未声明即不压缩。
+
 ## 4. 错误码映射
 
 错误在 HTTP 层表达。覆盖**完整 gRPC/Connect 错误码空间**：
