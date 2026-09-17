@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package easyrpc.kitchensink.v1;
+
+option go_package = "github.com/easy-utils/easy-rpc-go/kitchensink/v1;kitchensinkv1";
+
+message Shared {
+  string value = 1;
+  optional int32 count = 2;
+}

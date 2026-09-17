@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+// Kitchen-sink proto: exercises every generator edge case that has bitten us.
+//  - multiple services in one file (must emit per-service clients, not collapse)
+//  - proto3 optional (plugins must declare FEATURE_PROTO3_OPTIONAL)
+//  - map<k, v> (must stay a real map field, not repeated Entry)
+//  - oneof, nested messages, nested enums, top-level enums
+//  - cross-file import (shared.proto)
+//  - google.api.http GET + POST bindings, plus a no-annotation fallback
+//  - server-streaming method
+package easyrpc.kitchensink.v1;
+
+import "easyrpc/kitchensink/v1/shared.proto";
+import "google/api/annotations.proto";
+
+option go_package = "github.com/easy-utils/easy-rpc-go/kitchensink/v1;kitchensinkv1";
+
+enum Color {
+  COLOR_UNSPECIFIED = 0;
+  RED = 1;
+  GREEN = 2;
+}
+
+message Thing {
+  string id = 1;
+  map<string, string> labels = 2;
+  map<string, int64> counters = 3;
+  optional string nickname = 4;   // proto3 optional
+  oneof payload {
+    string text = 5;
+    bytes blob = 6;
+  }
+  Color color = 7;
+  Meta meta = 8;
+  message Meta {
+    string kind = 1;
+    repeated string tags = 2;
+  }
+  enum Level {
+    LEVEL_UNSPECIFIED = 0;
+    LOW = 1;
+    HIGH = 2;
+  }
+  Level level = 9;
+}
+
+message GetThingRequest { string id = 1; }
+message GetThingResponse { Thing thing = 1; Shared shared = 2; }
+
+message ListThingsRequest { int32 limit = 1; }
+message ListThingsResponse { repeated Thing things = 1; }
+
+message WatchThingsRequest { string prefix = 1; }
+message WatchThingsResponse { Thing thing = 1; }
+
+message NoRouteRequest { string q = 1; }
+message NoRouteResponse { string echoed = 1; }
+
+service ThingService {
+  rpc GetThing(GetThingRequest) returns (GetThingResponse) {
+    option (google.api.http) = { get: "/v1/things/{id}" };
+  }
+  rpc ListThings(ListThingsRequest) returns (ListThingsResponse) {
+    option (google.api.http) = { post: "/v1/things:list" body: "*" };
+  }
+  rpc WatchThings(WatchThingsRequest) returns (stream WatchThingsResponse) {
+    option (google.api.http) = { post: "/v1/things:watch" body: "*" };
+  }
+  rpc NoRoute(NoRouteRequest) returns (NoRouteResponse);  // no annotation -> fallback
+}
+
+// Second service in the SAME file: the generator must not drop it.
+service AdminThingService {
+  rpc Reset(NoRouteRequest) returns (NoRouteResponse) {
+    option (google.api.http) = { post: "/v1/admin:reset" body: "*" };
+  }
+}
