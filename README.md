@@ -74,7 +74,7 @@ v1 无 JSON codec，故不存在 `application/connect+json`。
 - `flags`：
   - bit0 = Compressed（v1 恒为 0，仅 identity）
   - bit1 = EndStream（客户端或服务端发送的最后一条）
-- `payload` = message 的 proto 二进制 或 `EndStreamMessage`。
+- `payload` = message 的 proto 二进制，或 **end-stream JSON**（仅 END 帧）。
 
 ### 3.1 unary
 - body = 请求 message 二进制（无帧）。
@@ -84,7 +84,14 @@ v1 无 JSON codec，故不存在 `application/connect+json`。
 ### 3.2 server-stream
 - 请求 = 单条 message 二进制（作为 POST body，无帧）。
 - 响应 = 一系列帧，每条 `[1B flags][4B len][msg]`。
-- 结束：服务端发送 `EndStreamMessage`（携带 `error/trailers`）或直接结束连接。
+- 结束：服务端发送 END 帧（`flags.bit1=1`）。空 payload = 正常结束；非空 payload = **Connect end-stream JSON**：
+
+  ```json
+  { "error": { "code": "not_found", "message": "..." }, "metadata": { "k": ["v"] } }
+  ```
+
+  客户端 **必须**解析该 JSON：存在 `error` 时抛出对应 code 的 RPCError，而不是当作正常结束。
+  `code` 是稳定的字符串名（`codeToString`/`codeFromString`，见 §4）。
 
 ---
 
@@ -115,7 +122,7 @@ v1 无 JSON codec，故不存在 `application/connect+json`。
 - **code → HTTP 状态**：权威方向，`httpStatus(code)`/`HTTPStatus(code)` 完整覆盖 1–16。
 - **HTTP 状态 → code**：可变（多对一），返回该状态最常见的 code，`connectFromStatus(status)` 覆盖 400/404/403/401/429/503/409/504/501/499，其余落 `13`。
 - unary：错误响应头 `connect-code`（数字）+ `connect-error`（消息）+ 对应状态码。
-- streaming：结束帧 `EndStreamMessage` 携带错误，或 HTTP 头携带错误 code/状态码。
+- streaming：**始终 HTTP 200**，错误只在 end-stream JSON 里（见 §3.2）；不与 HTTP 头混用。
 
 ---
 
