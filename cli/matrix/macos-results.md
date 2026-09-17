@@ -16,7 +16,7 @@ Linux 无法覆盖的 transport 做了端到端验证。测试端点均在本 po
 | macos-cmp | `OkHttpTransport` | h1 明文 | ✅ 3/3 |
 | macos-cmp | `OkHttpTransport` | **TLS + ALPN h2**（JKS 注入 CA） | ✅ 3/3 |
 | macos-flutter (Flutter/Dart) | `IoTransport`（dart:io） | **TLS**（SecurityContext 注入 CA） | ✅ 3/3 |
-| macos-flutter | `CupertinoHttpTransport` | — | ⚠️ 见下 |
+| macos-flutter | `CupertinoHttpTransport` | h1 明文（NSURLSession，**纯 Dart CLI**） | ✅ 3/3 |
 | macos-xcode (Swift 6.2.4) | `URLSessionTransport` | **TLS + ALPN h2**（delegate 注入 CA，IP SAN 校验） | ✅ echo/count/failDetails |
 | macos-xcode | `URLSessionTransport` | h1 明文 | ✅ echo/count/failDetails |
 | macos-xcode | `AsyncHTTPClientTransport` | h1 明文 | ✅ echo/count/failDetails（初判"容器崩溃"系误诊，见下） |
