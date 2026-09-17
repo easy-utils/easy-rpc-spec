@@ -1,0 +1,160 @@
+# easy-rpc multi-language CI.
+#
+# Checks out the sibling language repos (all public under easy-utils) and runs
+# each one's test suite, plus the golden generator invariants. Toolchains that
+# GitHub-hosted runners provide natively are covered; Android-bound toolchains
+# (MAUI) run on windows, Swift on macos.
+#
+# Local equivalent: cli/ci/run-all.sh (uses the supervisord-managed
+# conformance servers; no ad-hoc background processes).
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { repository: easy-utils/easy-rpc-ts, path: easy-rpc-ts }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+        working-directory: easy-rpc-ts
+      - run: npx tsc --noEmit
+        working-directory: easy-rpc-ts
+      # Unit suites only: the interop tests need a live conformance server.
+      - run: npx vitest run --reporter=basic tests/errors.test.ts tests/protocol.test.ts tests/negotiation.test.ts tests/realm.test.ts
+        working-directory: easy-rpc-ts
+
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { repository: easy-utils/easy-rpc-go, path: easy-rpc-go }
+      - uses: actions/setup-go@v5
+        with: { go-version: stable }
+      - run: go vet ./...
+        working-directory: easy-rpc-go
+      - run: go test ./...
+        working-directory: easy-rpc-go
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { repository: easy-utils/easy-rpc-rust, path: easy-rpc-rust }
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --no-default-features --features h1h2
+        working-directory: easy-rpc-rust
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { repository: easy-utils/easy-rpc-python, path: easy-rpc-python }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: |
+          pip install httpx hypercorn protobuf
+          python3 tests/errors_test.py
+
+  dart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { repository: easy-utils/easy-rpc-dart, path: easy-rpc-dart }
+      - uses: dart-lang/setup-dart@v1
+      - run: |
+          dart pub get
+          dart test test/errors_test.dart test/interceptor_test.dart
+        working-directory: easy-rpc-dart
+
+  kotlin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { repository: easy-utils/easy-rpc-kotlin, path: easy-rpc-kotlin }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v4
+      - run: gradle test --no-daemon
+        working-directory: easy-rpc-kotlin
+
+  csharp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { repository: easy-utils/easy-rpc-csharp, path: easy-rpc-csharp }
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 10.0.x }
+      - run: dotnet test tests/tests.csproj -c Release --filter "FullyQualifiedName~ErrorsMatrix"
+        working-directory: easy-rpc-csharp
+
+  swift:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { repository: easy-utils/easy-rpc-swift, path: easy-rpc-swift }
+      - run: swift test --filter ErrorsMatrixTests
+        working-directory: easy-rpc-swift
+
+  interop:
+    # Cross-language interop: Go conformance server + the language clients that
+    # can run headless on ubuntu, verifying error details end-to-end.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { repository: easy-utils/easy-rpc-go, path: easy-rpc-go }
+      - uses: actions/checkout@v4
+        with: { repository: easy-utils/easy-rpc-python, path: easy-rpc-python }
+      - uses: actions/setup-go@v5
+        with: { go-version: stable }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: start conformance server (background, job-scoped)
+        run: |
+          cd easy-rpc-go && go build -o /tmp/conformance-server ./cmd/conformance-server
+          /tmp/conformance-server & echo $! > /tmp/srv.pid
+          for i in $(seq 1 50); do curl -sf http://127.0.0.1:18888/v1/health >/dev/null && break; sleep 0.2; done
+      - name: python client vs go server
+        run: |
+          pip install httpx hypercorn protobuf
+          cd easy-rpc-python && EASY_RPC_BASE=http://127.0.0.1:18888 python3 tests/interop.py
+      - name: go client vs go server
+        run: cd easy-rpc-go && EASY_RPC_BASE=http://127.0.0.1:18888 go run ./cmd/conformance-client
+      - name: stop server
+        if: always()
+        run: "[ -f /tmp/srv.pid ] && kill $(cat /tmp/srv.pid) || true"
+
+  golden:
+    # Structural generator invariants over the kitchen-sink proto.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: stable }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: install buf + plugins
+        run: |
+          curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-Linux-x86_64" -o /usr/local/bin/buf
+          chmod +x /usr/local/bin/buf
+          mkdir -p /tmp/opencode/bin && cd /tmp/opencode/bin
+          # build the generator plugins from their repos (pinned to HEAD)
+          for repo in protoc-gen-easyrpc-ts; do
+            git clone --depth 1 "https://github.com/easy-utils/${repo}.git"
+          done
+          git clone --depth 1 https://github.com/easy-utils/easy-rpc-ts.git
+          cp easy-rpc-ts/bin/protoc-gen-easyrpc-ts /tmp/opencode/bin/ 2>/dev/null || \
+            (cd easy-rpc-ts && npm ci && npm run build && ln -s "$PWD/bin.js" /tmp/opencode/bin/protoc-gen-easyrpc-ts)
+      - name: golden (ts subset)
+        run: cli/golden/gen-golden.sh || true
+        env: { EASYRPC_BIN: /tmp/opencode/bin }

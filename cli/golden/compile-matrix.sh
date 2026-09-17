@@ -32,7 +32,7 @@ module goldencheck
 go 1.26.0
 
 require (
-  github.com/easy-utils/easy-rpc-go v0.2.0
+  github.com/easy-utils/easy-rpc-go v0.5.0
   google.golang.org/protobuf v1.36.12
 )
 MOD
@@ -66,7 +66,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-easy-rpc = { git = "https://github.com/easy-utils/easy-rpc-rust.git", tag = "v0.2.0", default-features = false, features = ["h1h2"] }
+easy-rpc = { git = "https://github.com/easy-utils/easy-rpc-rust.git", tag = "v0.5.0", default-features = false, features = ["h1h2"] }
 prost = "0.13"
 prost-types = "0.13"
 TOML_DOC

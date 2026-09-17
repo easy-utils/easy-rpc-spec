@@ -48,6 +48,16 @@ service ConformanceService {
   rpc Big(BigRequest) returns (BigResponse) {
     option (google.api.http) = { post: "/v1/big" body: "*" };
   }
+
+  // Fail the unary call with an error carrying structured details.
+  rpc FailDetails(FailDetailsRequest) returns (FailDetailsResponse) {
+    option (google.api.http) = { post: "/v1/fail-details" body: "*" };
+  }
+
+  // Emit N frames, then fail the stream with an error carrying details.
+  rpc StreamFailDetails(StreamFailDetailsRequest) returns (stream StreamFailDetailsResponse) {
+    option (google.api.http) = { post: "/v1/stream-fail-details" body: "*" };
+  }
 }
 
 // ---- Phase C additions: stream-end error + metadata + big payload ----
@@ -68,3 +78,22 @@ message EchoMetaResponse {
 
 message BigRequest { int32 size = 1; }
 message BigResponse { int32 size = 2; }
+
+// ---- Error-details conformance (spec §4.1) ----
+
+message FailDetailsRequest {
+  int32 code = 1;
+  string message = 2;
+  string detail_type = 3;  // ErrorDetail.type (a type URL)
+  string detail_text = 4;  // ErrorDetail.value bytes (UTF-8 text for testing)
+}
+message FailDetailsResponse { bool ok = 1; }
+
+message StreamFailDetailsRequest {
+  int32 emit_before = 1;
+  int32 code = 2;
+  string message = 3;
+  string detail_type = 4;
+  string detail_text = 5;
+}
+message StreamFailDetailsResponse { int32 index = 1; }

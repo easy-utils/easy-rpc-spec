@@ -163,6 +163,46 @@ connect({ baseUrl, token?, mode, timeoutMs?, interceptors? }) -> Transport
   - 兼容：客户端仍读取旧的 `connect-code`/`connect-error` 头，以及纯文本 body，按 头 → JSON body → 状态码 的顺序回退。
 - streaming：**始终 HTTP 200**，错误只在 end-stream JSON 里（见 §3.2）；不与 HTTP 头混用。
 
+### 4.1 Error Details（v1.1，可选、向前兼容）
+
+错误可携带**结构化 details**（对齐 Connect Error Details / gRPC `google.rpc.*` 状态详情）：
+
+```json
+{
+  "code": "resource_exhausted",
+  "message": "rate limited",
+  "details": [
+    { "type": "type.googleapis.com/google.rpc.RetryInfo", "value": "<base64 of protobuf bytes>" }
+  ]
+}
+```
+
+- 位置：unary 错误 body 顶层 `details`；streaming 在 `error.details`。
+- 元素结构固定为 `{ "type": "<type URL>", "value": "<base64>" }`；`value` 是任意字节（典型为 protobuf 消息），各语言 API 暴露为 `ErrorDetail{type: string, value: bytes}`。
+- **为空必须省略** `details` 字段（保持 v1.0 字节级不变）。
+- **向前兼容**：JSON 解析忽略未知字段——v1.0 客户端收到含 `details` 的错误不报错，仅丢弃；服务端可先升级。各语言实现只读 `type`/`value`，其余字段（如未来的 `debug`）原样忽略。
+- 语义约定（非强制）：`type` 建议 `type.googleapis.com/google.rpc.<Name>`，value 为对应 `google.rpc` 消息；但 wire 层不做任何校验，opaque 透传。
+
+### 4.2 错误路径矩阵（各语言一致性基准）
+
+下列输入是协议层**必须**具有的一致行为，作为各语言单元测试的公共矩阵（`decodeEndStream` / `decodeErrorJson` / 帧解码 / 截止时间）：
+
+| # | 输入 | 期望行为 |
+|---|------|----------|
+| M1 | END 帧空 payload | 干净结束，无错误 |
+| M2 | END 帧 payload 非 JSON（垃圾字节） | 按干净结束处理（不抛），不得崩溃 |
+| M3 | END 帧 `{"error":{}}`（无 code/message） | code=2(unknown)，message="" |
+| M4 | END 帧 `error.code` 为未知名字 | code=2 |
+| M5 | END 帧 JSON 含未知字段（如 `{"error":{...},"x":1}`） | 正常解析，未知字段忽略 |
+| M6 | END 帧 `error.details` 数组 | RPCError.details 携带 `{type,value}`，value 为 base64 解码后的字节 |
+| M7 | details 元素缺 `value` 或非 base64 | 忽略该元素，不得崩溃 |
+| M8 | 帧头声明长度 > 实际 body（截断） | 读取出错（不得返回部分 payload 当成功） |
+| M9 | 帧长度 > 4MB（默认上限） | 拒收，code=8 resource_exhausted |
+| M10 | gzip 置位但 payload 损坏 | 解压失败按协议错误处理（不返回原始压缩字节） |
+| M11 | unary 错误 body 为纯文本（旧服务器） | 回退：`connect-code` 头 → 状态码映射 |
+| M12 | `connect-timeout-ms` 到期（本地） | 抛 code=4，且请求被取消 |
+| M13 | 服务端 deadline 到期 | end-stream/unary 错误 code=4 |
+
 ---
 
 ## 5. Transport 接口（核心概念）
@@ -261,13 +301,16 @@ Response { status: int, headers: Headers, body: Stream<Bytes>, trailers: Headers
 
 ## 8. Conformance（验证）
 
-标准服务定义见 `conformance/`：
+标准服务定义见 `proto/easyrpc/conformance/v1/`：
 - unary：`Echo`
 - server-stream：`Count`（计数推送）
-- 错误用例：`Fail`
-- 边界：非 UTF-8、空消息、EndStream。
+- 错误用例：`Fail`、`StreamFail`
+- 错误 details：`FailDetails`（unary）、`StreamFailDetails`（stream 中途失败，均带 `details`）
+- 元数据/边界：`EchoMeta`、`Big`、非 UTF-8、空消息、EndStream。
 
-验证方式：同一 `Transport` 跨 Go 服务端 ↔ Go/TS 客户端 互测，对比协议一致性。
+验证方式：
+- §4.2 **错误路径矩阵** M1–M13：各语言单元测试直接对 `decode*`/帧解码函数构造输入（不需要起服务）。
+- 互操作：同一 `Transport` 跨 Go 服务端 ↔ 各语言客户端互测，对比协议一致性。
 
 ---
 
