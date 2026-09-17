@@ -48,3 +48,45 @@ Linux 无法覆盖的 transport 做了端到端验证。测试端点均在本 po
 
 worker 工程保留在各 workspace：`kt/`（cmp）、`io/`+`dart/`+`ft/`（flutter）、`/tmp/easy-rpc-swift`（xcode）。
 推 file 用 FileWrite、跑用 Execute/JobWait（`/tmp/opencode/ew*.sh` 有现成封装）。
+
+## Cronet 与 h3（2026-09-18 第二轮）
+
+### Kotlin CronetTransport（新增，v0.5.5）
+
+`compileOnly` 依赖 cronet API（调用方自带 embedded/Play-Services 引擎）、engine 由调用方注入、
+增量 openStream + 共享错误链。验证方式：桌面 JVM 无官方 cronet 原生库（`cronet-bundled` 仅
+Android ABI .so），用 **API 500 + cronet-fallback 119（纯 Java h1）+ android stub jar** 验证
+代码路径：
+
+| 环境 | 结果 |
+|---|---|
+| Linux JVM（本地 pod） | ✅ echo/count/failDetails（`CRONET_CODEPATH_PASS`） |
+| macOS cmp worker | ✅ 3/3（同款工程） |
+| Android 模拟器（真 h2/h3） | ⏳ 等 Android 容器就绪（cronet-bundled Android so 齐全） |
+
+实现中修复的通用 bug：
+1. **回调 executor**：direct executor 在 Java 引擎上死锁（回调重入引擎锁）——改共享 daemon 池
+2. **`tryReceive` 空≠关**：首轮回调前误判"流结束"（receiveCatching 挂起等待）
+3. AAR 消费：JVM 工具链不能直接吃 AAR，gradle 脚本从 Google Maven 直下解包 classes.jar
+   （Gradle 变体元数据会解析到空壳 `cronet-api` artifact）
+
+### Dart CronetHttpTransport（重写，v0.6.1）
+
+对齐 cronet_http 1.9 API（`package:http` 形态：Uri 入参、`statusCode`、头单/多值映射、
+`CronetClient.defaultCronetEngine()` 工厂）+ `StreamedRequest/StreamedResponse` 增量流。
+**flutter worker 上 `flutter test` 真实编译 + 构造测试通过**（"cronet transport constructs"）；
+运行时 h2/h3 等 Android 场景。
+
+### 首次 h3/QUIC 端到端（Python，v0.5.4）
+
+`AioquicTransport` 对 caddy QUIC 端点（UDP 18443）三件套全过（echo/count 流/failDetails，
+`PY_H3_ALL_PASS`）。修复两个老 bug：
+1. aioquic ≥1.2 移除 `QuicConnection.transmit()` —— 改经 protocol 刷数据报
+2. **open_stream 连接生命周期**：生成器从 `async with` 内返回，QUIC 连接在首帧前就被关 ——
+   改为连接随流存活（手动 enter/exit）
+
+### 待办（等 Android 模拟器容器）
+
+- Kotlin CronetTransport 真 h2/h3（TLS 信任：模拟器系统 CA 或注入引擎）
+- Dart CronetHttpTransport 运行时（同上）
+- worker 复用工程：cmp `cronet-verify/`、flutter `ccheck/`

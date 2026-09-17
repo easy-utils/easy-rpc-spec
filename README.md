@@ -315,13 +315,13 @@ Response { status: int, headers: Headers, body: Stream<Bytes>, trailers: Headers
 | **C#** | `HttpClientTransport`（`.H1()` `.H2()` `.H3()`） | Linux/桌面/Android/iOS | h1 / h2(https) / h3（System.Net.Http+msquic/平台handler） |
 | **Kotlin** | `OkHttpTransport` | Linux/JVM | h1+h2c+h2 |
 | | `CioTransport` | 非JVM原生（全target） | **仅 h1**（纯Kotlin，最小依赖） |
-| | `CronetTransport` | Android | h1+h2+h3（Cronet） |
-| | `DarwinTransport` | iOS/macOS | h1+h2+h3（NSURLSession） |
+| | `CronetTransport`（v0.5.5+，compile-only API，引擎注入） | JVM(嵌入式)/Android | h1+h2+h3（Cronet） |
+| | `DarwinTransport` | iOS/macOS | **未实现**（需 Kotlin/Native；用 Swift 包的 URLSessionTransport） |
 | **Swift** | `URLSessionTransport` | iOS/macOS | h1+h2+h3（系统） |
 | | `AsyncHTTPClientTransport` | Linux/服务端 | h1+h2c+h2（async-http-client） |
 | **Dart** | `Transport`(dart:io) | Linux/VM | h1 |
 | | `Http2Transport` | Linux/VM | h1+h2c+h2（`http2` 包） |
-| | `CronetHttpTransport` | Android | h1+h2+h3（`cronet_http`，Flutter） |
+| | `CronetHttpTransport`（v0.6.1+，cronet_http 1.9 API，增量流） | Android | h1+h2+h3（`cronet_http`，Flutter） |
 | | `CupertinoHttpTransport` | iOS/macOS | h1+h2+h3（`cupertino_http`，Flutter） |
 | | `FetchTransport` | Web | h1+h2+h3（`fetch`） |
 
