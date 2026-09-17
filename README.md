@@ -137,7 +137,8 @@ core 内建 `Interceptor`（每语言一致）：包装一次调用，可改请�
 
 - **code → HTTP 状态**：权威方向，`httpStatus(code)`/`HTTPStatus(code)` 完整覆盖 1–16。
 - **HTTP 状态 → code**：可变（多对一），返回该状态最常见的 code，`connectFromStatus(status)` 覆盖 400/404/403/401/429/503/409/504/501/499，其余落 `13`。
-- unary：错误响应头 `connect-code`（数字）+ `connect-error`（消息）+ 对应状态码。
+- unary（Connect 对齐）：HTTP 状态码表达错误**类别**，响应体为 JSON `{"code":"<name>","message":"...","details":[...]}`。
+  - 兼容：客户端仍读取旧的 `connect-code`/`connect-error` 头，以及纯文本 body，按 头 → JSON body → 状态码 的顺序回退。
 - streaming：**始终 HTTP 200**，错误只在 end-stream JSON 里（见 §3.2）；不与 HTTP 头混用。
 
 ---
