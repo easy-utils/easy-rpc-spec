@@ -118,6 +118,21 @@ core 内建 `Interceptor`（每语言一致）：包装一次调用，可改请�
 - unary 保持 identity（v1）。
 - 客户端收到 bit0=1 的帧必须解压；未声明即不压缩。
 
+## 3.6 组合根（connect）
+
+每语言提供一个 `connect(...)` 组合根，业务只与它交互：
+
+```
+connect({ baseUrl, token?, mode, timeoutMs?, interceptors? }) -> Transport
+    = InterceptorTransport([metadata, deadline, ...user], adapterFor(mode))
+```
+
+- `mode`（统一词表）：`auto`（按环境/平台选择）、以及各语言可用 adapter 名
+  （TS `fetch|node|h1`；Dart `io|http2`；Kotlin `okhttp`；C# `h1|h2|h3`；
+  Swift `urlSession|asyncHTTPClient`；Rust `auto|hyper`；Python/Go `std|auto`）。
+- **换 adapter = 换 `mode`；interceptor 不动**——这是"每语言可更换 transport adapter"的实现方式。
+- `token`/`timeoutMs` 由内建 interceptor 实现；调用方无需写任何 wrapper。
+
 ## 4. 错误码映射
 
 错误在 HTTP 层表达。覆盖**完整 gRPC/Connect 错误码空间**：
