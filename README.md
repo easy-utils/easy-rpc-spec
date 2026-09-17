@@ -54,12 +54,12 @@ service RepoService {
 
 ## 2. Content-Type
 
-| 形状 | Content-Type |
-|------|--------------|
-| unary | `application/proto` |
-| server-stream | `application/connect+proto` |
+| 形状 | proto | JSON |
+|------|-------|-----|
+| unary | `application/proto` | `application/json` |
+| server-stream | `application/connect+proto` | `application/connect+json` |
 
-v1 无 JSON codec，故不存在 `application/connect+json`。
+服务端 kind 检测必须同时认 `application/json` 与 `application/connect+json` 前缀（流式 JSON 请求的 content-type 是后者）。
 
 ---
 
