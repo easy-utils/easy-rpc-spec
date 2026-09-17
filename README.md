@@ -203,6 +203,36 @@ connect({ baseUrl, token?, mode, timeoutMs?, interceptors? }) -> Transport
 | M12 | `connect-timeout-ms` 到期（本地） | 抛 code=4，且请求被取消 |
 | M13 | 服务端 deadline 到期 | end-stream/unary 错误 code=4 |
 
+### 4.3 故障注入矩阵（F1–F6，v1.1，socket 级/协议级）
+
+在 M 矩阵（单元级）之上，各语言还必须对**畸形流 body**具备一致行为（TS/Go/Rust/Python 为 socket 级 mock 服务端测试，Kotlin/Dart/C#/Swift 为协议级帧读取器测试）：
+
+| # | 输入 | 期望行为 |
+|---|------|----------|
+| F1 | body 在帧中段截断（EOF 时半帧） | 错误（code=13 truncated frame），已完整收到的帧正常交付 |
+| F2 | body 在帧边界结束但**无 END 帧** | 错误（code=13 stream ended without END frame）——Connect 协议要求每个 server-stream 必须以 END 帧终止 |
+| F3 | END 帧 payload 为垃圾字节 | 同 M2：干净结束，不抛 |
+| F4 | 压缩位置位但 gzip 损坏 | 错误（code=13 corrupt gzip frame），**绝不**把原始压缩字节当 payload 交付 |
+| F5 | 帧被任意切成小 chunk 传输 | 正确重组（读取器必须累积，不得因分片丢字节） |
+| F6 | 合法 gzip 帧 | 正常解压交付 |
+
+**gzip wire 语义**：压缩帧一律使用 RFC-1952 gzip wrapper（`1f 8b` 魔数），与 Go/Python/Rust/Dart/Kotlin/C#/Swift 实现一致。TS 实现曾在 v0.5.0 前误用 raw deflate（跨语言不可互通），v0.5.1 起修正。压缩是**机会性**的（失败可退化为不压缩）；解压是**严格**的（失败=协议错误）。
+
+### 4.4 组合根注入语义（v1.1）
+
+`connect()` 组合根在全部 8 语言支持**自定义 adapter 注入**：注入时跳过 mode 选择，内建 metadata/deadline 拦截器与用户拦截器包装**该 adapter**。
+
+| 语言 | 注入方式 |
+|------|---------|
+| C# | `ConnectOptions.Adapter` |
+| Swift | `connect(transport:)` |
+| TS | `connect({ transport })` |
+| Go | `ConnectOptions.Adapter` |
+| Rust | `connect_with_adapter(..)` |
+| Python | `connect(transport=...)` |
+| Kotlin | `connect(client = OkHttpClient)`（OkHttp 层注入） |
+| Dart | `connect(httpClient:)`（dart:io HttpClient 层注入） |
+
 ---
 
 ## 5. Transport 接口（核心概念）
