@@ -103,6 +103,14 @@ v1 无 JSON codec，故不存在 `application/connect+json`。
   - server-stream：始终 HTTP 200，END 帧携带 `{"error":{"code":"deadline_exceeded",...}}`。
 - 客户端亦可本地强制超时（`withTimeout`），到点取消请求。
 
+## 3.4 拦截器（内建扩展点）
+
+core 内建 `Interceptor`（每语言一致）：包装一次调用，可改请求（auth/metadata）、加 deadline、观察、短路。
+
+- 组合顺序：列表首个为最外层。
+- 内建拦截器：`MetadataInterceptor`（添加固定头）、`TimeoutInterceptor`（附加 `connect-timeout-ms`）。
+- 传输层用 `InterceptorTransport`（或 `interceptors(...)`）包裹；鉴权/重试/日志均以此实现，避免每 transport 手写 wrapper。
+
 ## 4. 错误码映射
 
 错误在 HTTP 层表达。覆盖**完整 gRPC/Connect 错误码空间**：
