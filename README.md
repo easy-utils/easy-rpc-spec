@@ -95,6 +95,14 @@ v1 无 JSON codec，故不存在 `application/connect+json`。
 
 ---
 
+## 3.3 截止时间（Connect-Timeout-Ms）
+
+- 客户端可选地在请求头携带 `connect-timeout-ms: <毫秒>`（整数）。
+- 服务端解析该头，将其作为本次调用的 deadline：超时以 code=4（deadline_exceeded）结束。
+  - unary：返回 HTTP 504 + `connect-code: 4`（或 Connect JSON 错误体，见 §4）。
+  - server-stream：始终 HTTP 200，END 帧携带 `{"error":{"code":"deadline_exceeded",...}}`。
+- 客户端亦可本地强制超时（`withTimeout`），到点取消请求。
+
 ## 4. 错误码映射
 
 错误在 HTTP 层表达。覆盖**完整 gRPC/Connect 错误码空间**：
