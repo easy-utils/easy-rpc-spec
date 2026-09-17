@@ -33,4 +33,38 @@ service ConformanceService {
   rpc Fail(FailRequest) returns (FailResponse) {
     option (google.api.http) = { post: "/v1/fail" body: "*" };
   }
+
+  // Emit N frames then end the stream with a Connect end-stream error.
+  rpc StreamFail(StreamFailRequest) returns (stream StreamFailResponse) {
+    option (google.api.http) = { post: "/v1/stream-fail" body: "*" };
+  }
+
+  // Echo selected request metadata back in the response.
+  rpc EchoMeta(EchoMetaRequest) returns (EchoMetaResponse) {
+    option (google.api.http) = { post: "/v1/echo-meta" body: "*" };
+  }
+
+  // Return `size` bytes to exercise max-message behavior.
+  rpc Big(BigRequest) returns (BigResponse) {
+    option (google.api.http) = { post: "/v1/big" body: "*" };
+  }
 }
+
+// ---- Phase C additions: stream-end error + metadata + big payload ----
+
+message StreamFailRequest {
+  // Emit this many data frames, then fail with `code`.
+  int32 emit_before = 1;
+  int32 code = 2;
+  string message = 3;
+}
+message StreamFailResponse { int32 index = 1; }
+
+message EchoMetaRequest { string input = 1; }
+message EchoMetaResponse {
+  string input = 1;
+  map<string, string> meta = 2;   // mirrors selected request metadata
+}
+
+message BigRequest { int32 size = 1; }
+message BigResponse { int32 size = 2; }
