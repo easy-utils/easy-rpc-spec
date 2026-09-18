@@ -1,0 +1,24 @@
+# Features of an easy-rpc server under test (the simplified Connect subset):
+# proto codec only, Connect protocol only, unary + server-stream only,
+# identity + gzip compression, h1 and h2c. Client/bidi streaming, JSON, and
+# Connect-over-GET are intentionally unsupported.
+features:
+  versions:
+    - HTTP_VERSION_1
+    - HTTP_VERSION_2
+  protocols:
+    - PROTOCOL_CONNECT
+  codecs:
+    - CODEC_PROTO
+  compressions:
+    - COMPRESSION_IDENTITY
+    - COMPRESSION_GZIP
+  streamTypes:
+    - STREAM_TYPE_UNARY
+    - STREAM_TYPE_SERVER_STREAM
+  supports_h2c: true
+  supports_tls: false
+  supports_trailers: true
+  supports_connect_get: false
+  supports_message_receive_limit: false
+  supports_tls_client_certs: false
