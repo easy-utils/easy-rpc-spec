@@ -18,6 +18,28 @@ oracle exists. That oracle is:
 `cli/matrix/run-matrix.sh` then exercises every (client × transport) against
 every server, so transport-specific bugs (e.g. an h2c status-code loss) surface.
 
+## Official ConnectRPC suite
+
+In addition to our own oracle, every server implementation is validated against
+the **official** `connectconformance` runner (vendored protos + config under
+`conformance/official/`). The server command reads a size-prefixed
+`ServerCompatRequest` from stdin, starts an ephemeral server implementing the
+official `connectrpc.conformance.v1.ConformanceService`, and replies with a
+size-prefixed `ServerCompatResponse`.
+
+```bash
+# Build the runner once:
+git clone --depth 1 https://github.com/connectrpc/conformance /tmp/cconf
+( cd /tmp/cconf && go build -o /tmp/opencode/bin/connectconformance ./cmd/connectconformance )
+
+bash conformance/official/run-official.sh ts       # or: go | rust | python
+```
+
+All four server implementations currently pass **292/292** official cases
+(h1 + h2c, connect + proto, identity + gzip, unary + server-stream). Client /
+bidi streaming are intentionally out of scope for easy-rpc and are excluded by
+`configs/easy-rpc-server.yaml`.
+
 ## Regenerating the vectors
 
 ```bash

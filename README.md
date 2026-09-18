@@ -362,8 +362,9 @@ Response { status: int, headers: Headers, body: Bytes, trailers: Headers }
 | **故障注入** | 各语言 `fault_injection*` 测试 | 是（mock socket） | F1–F6 畸形流 body |
 | **Raw-wire oracle** | `cli/raw-wire.sh` | 否（仅 curl） | 独立于所有实现，校验真实 HTTP 线上契约（路径/状态码/415/404/trailer/END 字节） |
 | **互通矩阵** | `cli/matrix/run-matrix.sh` | 是 | (client × transport) × (server) 全组合 |
+| **官方 ConnectRPC suite** | `conformance/official/run-official.sh` | 是 | 用 vendored 官方 proto + `connectconformance` runner 对表（可编程 `ConformanceService`），server 侧 292/292（h1+h2c、proto、identity+gzip、unary+server-stream） |
 
-**协议正确性** = Wire 向量 + 故障注入 + 真 `@connectrpc` 双向互测（`easy-rpc-ts/tests/connectrpc-interop.test.ts`）。
+**协议正确性** = Wire 向量 + 故障注入 + 真 `@connectrpc` 双向互测（`easy-rpc-ts/tests/connectrpc-interop.test.ts`）+ 官方 suite。
 **transport 正确性** = 互通矩阵里每个 client 用**每个** transport 跑同一份 checklist（`EASY_RPC_TRANSPORT` 选择）。
 
 ### 8.2 transport 轴（`EASY_RPC_TRANSPORT`）
