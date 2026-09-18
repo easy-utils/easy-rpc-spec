@@ -99,10 +99,18 @@ Android ABI .so），用 **API 500 + cronet-fallback 119（纯 Java h1）+ andro
 `net::ERR_ACCESS_DENIED (-10)`**——h1 明文、TLS、quic-hint、GMS/嵌入式 provider、
 enablePublicKeyPinningBypass 组合均复现。
 
-判定：cronet_http 1.8（jnigen 绑定）在请求线程身份/网络标签上的缺陷——cronet 以发起线程的
-binder 身份做权限检查，jnigen 回调线程未携带应用的 INTERNET 网络标签（Kotlin 路径无此问题）。
-属上游包问题，非 easy-rpc 传输层问题；Dart CronetHttpTransport 代码已按 1.9 API 重写并在
-flutter worker 通过真实编译（`flutter test`：`cronet transport constructs`），待上游修复或换
-jni 手动打标签后即可运行。
+判定（4 轮收敛实验后定稿）：错误与请求内容无关（GET 无 upload 同样失败），与 provider 无关
+（GMS / embedded-151 均复现），与 cleartext/QUIC-hint/pinning 无关，与上传线程无关——
+**Kotlin 同引擎从 UI 主线程、池线程发起全部 PASS**。唯一残留变量：cronet_http 经 jnigen 从
+**JNI-attached 的 Dart isolate pthread**（无 Java Thread 身份）直接 `UrlRequest.start()`，
+cronet native 对该类线程的 binder/UID 校验判为 ACCESS_DENIED。属上游 jnigen/cronet_http
+交互问题（dart-lang/http#1241 记录了同族 jnigen 线程问题），非 easy-rpc 传输层问题。
 
-**Cronet 的权威验证路径 = easy-rpc-kotlin `CronetTransport`（见上节，全绿）。**
+已做 workaround 记录：`--dart-define=cronetHttpNoPlay=true`（纯 embedded，绕开 GMS
+"signature invalid" 与 141 版 cronet-api dummy-manifest 的 namespace 冲突）是必须的；
+1.10.0-wip 的 jnigen 1.0 重构可能解决线程身份问题——跟踪后重测即可。
+
+**Cronet 的权威验证路径 = easy-rpc-kotlin `CronetTransport`（见上节，全绿：h1 + TLS-h2 +
+negotiated h3 取证）。** Dart `CronetHttpTransport` 代码已按 cronet_http 1.9 API 重写并在
+flutter worker 通过真实编译（`flutter test`：`cronet transport constructs`），上游修复后
+无需改动即可运行。
