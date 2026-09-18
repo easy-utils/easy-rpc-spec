@@ -155,3 +155,36 @@ HTTP/2 路径读、QUIC 路径回落系统信任库，于是握手因 "certifica
 
 **结论**：h3 功能已实证（BlissOS + pod 侧）；在本 Android-15 镜像上，受"应用级 CA 不被 QUIC 证书校验采信"限制，
 自动降级到 h2 且 RPC 全绿——降级行为本身也符合预期。
+
+## Cronet 的 CA 注入机制（源码级结论，Android 15 实测）
+
+为让 QUIC 握手认私签 CA，逐一验证了 Cronet 的证书注入路径（`cronet-api:500.0.2` 字节码）：
+
+| 注入点 | 覆盖范围 | 实测 |
+|---|---|---|
+| `network_security_config`（`@raw`，应用级） | **仅 HTTP/HTTP2 平台校验** | TLS h2 ✅；QUIC ❌ |
+| `X509Util.addTestRootCertificate` | 仅 **platform verifier** 的 `sCertVerifier` | QUIC 仍失败 |
+| `X509Util.setTestRootCertificateForBuiltin` | 仅 `sTestRoot`（builtin verifier 的测试槽） | QUIC 仍失败 |
+| **`getUserAddedRoots()`**（QUIC/现代校验真正用的） | 系统 CA keyStore 里 **`user:` 前缀**别名 | 见下 |
+
+**关键发现**：现代校验（`X509Util.verifyServerCertificates`）走的是 builtin verifier；
+`getUserAddedRoots()` 的实现是**枚举系统 KeyStore 中前缀 `user:` 的别名**，每次校验实时读取。
+所以正确注入点是向系统 CA 库注册一个 `user:` 条目，而不是任何 `X509Util.set*` 测试槽。
+
+**在应用进程内不可行**：
+```
+java.security.KeyStore.getInstance("AndroidCAStore").setCertificateEntry("user:...")
+→ UnsupportedOperationException   （app 进程无写权限）
+```
+**用 root 直接投放也不行**：把证书放到 `/data/misc/keychain/cacerts-added/<hash>.0`
+（Settings 安装用户证书的落点）后重启应用，QUIC 依旧 `CERTIFICATE_VERIFY_FAILED`
+——该系统镜像的用户 CA 目录需要由 keystore/keychain 服务在**框架层重新扫描**才生效，
+而触发重扫需要 `stop/start framework`，这台模拟器在 AVB 锁定的前提下反复崩（zygote 挂）。
+
+**结论**：
+- QUIC 私签 CA 的可用注入点只有**系统信任库**（真机 root/Magisk 模块，或可写 `/system` 的设备）——
+  BlissOS round 正是如此成功的（`probe -> (200, h3)`）。
+- 本镜像 bootloader 锁定 + AVB enforcing，**无任何应用层/root 层注入能让 QUIC 认可私签 CA**；
+  Cronet 依设计降级到 h2，RPC 全绿——这本身就是正确的行为。
+- 若要在无系统写权限的设备上跑 h3，正解是给 endpoint 用**公网可信证书**（ACME），
+  而非注入私签 CA。本 sandbox 无公网出口，无法 A/B 验证这一点。
