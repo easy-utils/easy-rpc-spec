@@ -91,26 +91,36 @@ Android ABI .so），用 **API 500 + cronet-fallback 119（纯 Java h1）+ andro
 - Dart CronetHttpTransport 运行时（同上）
 - worker 复用工程：cmp `cronet-verify/`、flutter `ccheck/`
 
-### Dart cronet_http 运行时（BlissOS 模拟器实测：受限于上游 bug）
+### Dart cronet_http 运行时（Android 15 google_apis 模拟器实测：已解决）
 
-工程 `ccheck`（flutter worker）/ `cronet-dart*.apk`（Kotlin MainActivity 已修正 package 对齐）。
-现象：同引擎（embedded cronet 151, x86_64）、同 manifest（INTERNET + ACCESS_NETWORK_STATE）、
-同 TLS 信任（系统 CA 已装），**Kotlin 原生 UrlRequest 全绿，cronet_http(Dart/jnigen) 全部请求
-`net::ERR_ACCESS_DENIED (-10)`**——h1 明文、TLS、quic-hint、GMS/嵌入式 provider、
-enablePublicKeyPinningBypass 组合均复现。
+环境：`easyworker-android`（独立 pod，Android 15 / API 35，userdebug，含真 GMS 24.23.35，
+cronet 模拟器可用）。上轮 BlissOS 的结论（"jnigen 线程身份缺陷"）**被证伪并修正**。
 
-判定（4 轮收敛实验后定稿）：错误与请求内容无关（GET 无 upload 同样失败），与 provider 无关
-（GMS / embedded-151 均复现），与 cleartext/QUIC-hint/pinning 无关，与上传线程无关——
-**Kotlin 同引擎从 UI 主线程、池线程发起全部 PASS**。唯一残留变量：cronet_http 经 jnigen 从
-**JNI-attached 的 Dart isolate pthread**（无 Java Thread 身份）直接 `UrlRequest.start()`，
-cronet native 对该类线程的 binder/UID 校验判为 ACCESS_DENIED。属上游 jnigen/cronet_http
-交互问题（dart-lang/http#1241 记录了同族 jnigen 线程问题），非 easy-rpc 传输层问题。
+**结论：Dart cronet_http 在正确的 provider 下完全可用。**
 
-已做 workaround 记录：`--dart-define=cronetHttpNoPlay=true`（纯 embedded，绕开 GMS
-"signature invalid" 与 141 版 cronet-api dummy-manifest 的 namespace 冲突）是必须的；
-1.10.0-wip 的 jnigen 1.0 重构可能解决线程身份问题——跟踪后重测即可。
+| 路径 | 结果 |
+|---|---|
+| GMS provider（`CronetClient.defaultCronetEngine()`，getGMS dynamite cronet 126） | ✅ walk 全绿 |
+| embedded provider + `cronetHttpNoPlay=true`（BlissOS 走法） | ⚠️ 在 BlissOS 上 -10（GMS 链路问题，非通用） |
 
-**Cronet 的权威验证路径 = easy-rpc-kotlin `CronetTransport`（见上节，全绿：h1 + TLS-h2 +
-negotiated h3 取证）。** Dart `CronetHttpTransport` 代码已按 cronet_http 1.9 API 重写并在
-flutter worker 通过真实编译（`flutter test`：`cronet transport constructs`），上游修复后
-无需改动即可运行。
+**真机上可用的旁证**：GMS 路径的关键是 cronet_http 依赖 `play-services-cronet` 的 dynamite 模块；
+BlissOS 无真 GMS，dynamite 加载失败才会随 provider 回落出现问题。标准 google_apis 镜像 /
+真机都有 dynamite 模块，故 `cronet_http` 走 GMS 生产路径是可用的。
+
+**本轮顺带修掉一个真正的传输层 bug（v0.6.2）**：`CronetHttpTransport.openStream` 用
+`http.StreamedRequest` 会死锁——cronet_http 内部 `finalize().toBytes()` 先把
+single-subscription controller drain 掉，随后才 subscribe，send future 永不完成。
+改为携带 `bodyBytes` 的 `http.Request`（请求体本来就被 cronet 缓冲），响应仍增量推送。
+
+**Dart 侧最终验证（v0.6.2 + GMS 路径）**：
+
+```
+probe http  -> (200, unknown)      # h1
+probe tls#1 -> (200, h2)           # TLS + ALPN
+PASS cronet-dart-h1/echo · count · failDetails
+PASS cronet-dart-tls/echo · count · failDetails
+DART_CRONET_ANDROID_ALL_PASS
+```
+
+TLS 信任用**应用级 `network_security_config`**（`@raw/easyrpc_ca`），不依赖系统信任库——
+两个 transport（Kotlin/Dart）现均可在任意 Android 设备/模拟器上验证。
