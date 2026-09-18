@@ -28,7 +28,7 @@ sleep 1.2
 cleanup() { echo "[interop] stopping go server..."; pkill -f conformance-server 2>/dev/null || true; }
 trap cleanup EXIT
 
-echo "[interop] health=$(curl -s "$HOST/v1/health" -o /dev/null -w '%{http_code}')"
+echo "[interop] health=$(curl -s "$HOST/easyrpc.conformance.v1.ConformanceService/Health" -o /dev/null -w '%{http_code}')"
 
 echo "[interop] TS client..."
 ( cd "$TS" && npx vitest run tests/interop.test.ts )

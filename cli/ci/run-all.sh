@@ -46,7 +46,7 @@ for srv in conformance-go conformance-rust conformance-python; do
 done
 sleep 0.5
 for port in 18888 18889 18887; do
-  curl -s -m 2 "http://127.0.0.1:$port/v1/health" >/dev/null \
+  curl -s -m 2 "http://127.0.0.1:$port/easyrpc.conformance.v1.ConformanceService/Health" >/dev/null \
     || echo "warn: conformance server on :$port not up" >&2
 done
 

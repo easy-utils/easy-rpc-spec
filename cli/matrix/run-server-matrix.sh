@@ -18,7 +18,7 @@ import { create } from '/home/user/easy-utils/easy-rpc-ts/node_modules/@bufbuild
 import { HealthResponseSchema, EchoResponseSchema, CountResponseSchema, FailResponseSchema } from '/home/user/easy-utils/easy-rpc-ts/dist/easyrpc/conformance/v1/conformance_pb.js';
 const impl = { health:async()=>create(HealthResponseSchema,{ok:true,name:'conformance'}), echo:async(r)=>create(EchoResponseSchema,{output:'echo:'+r.input}), count:async()=>({ async *[Symbol.asyncIterator](){ for(let i=0;i<3;i++) yield create(CountResponseSchema,{index:i}) } }), fail:async()=>create(FailResponseSchema,{ok:true}) };
 const h = ConformanceServiceHandlers(impl);
-http2Server(createServer([{path:'/v1/health',name:'Health',serverStream:false},{path:'/v1/echo',name:'Echo',serverStream:false},{path:'/v1/count',name:'Count',serverStream:true}], h)).listen(Number(process.env.PORT),'127.0.0.1',()=>console.log('ts h2 on',process.env.PORT));
+http2Server(createServer([{path:'/easyrpc.conformance.v1.ConformanceService/Health',name:'Health',serverStream:false},{path:'/easyrpc.conformance.v1.ConformanceService/Echo',name:'Echo',serverStream:false},{path:'/easyrpc.conformance.v1.ConformanceService/Count',name:'Count',serverStream:true}], h)).listen(Number(process.env.PORT),'127.0.0.1',()=>console.log('ts h2 on',process.env.PORT));
 " >"$M/srv-tsh2.log" 2>&1 </dev/null & echo $! >"$M/srv-tsh2.pid"; else kill "$(cat "$M/srv-tsh2.pid" 2>/dev/null)" 2>/dev/null; rm -f "$M/srv-tsh2.pid"; fi; }
 srv_rust()     { if [ "${1:-}" = start ]; then ( cd /home/user/easy-utils/easy-rpc-rust && cargo build --release >/dev/null 2>&1 ); PORT="$P" setsid /home/user/easy-utils/easy-rpc-rust/target/release/conformance_server >"$M/srv-rust.log" 2>&1 </dev/null & echo $! >"$M/srv-rust.pid"; else kill "$(cat "$M/srv-rust.pid" 2>/dev/null)" 2>/dev/null; rm -f "$M/srv-rust.pid"; fi; }
 srv_uvicorn()  { if [ "${1:-}" = start ]; then PORT="$P" setsid python3 /home/user/easy-utils/easy-rpc-python/conformance_server_uvicorn.py >"$M/srv-uvicorn.log" 2>&1 </dev/null & echo $! >"$M/srv-uvicorn.pid"; else kill "$(cat "$M/srv-uvicorn.pid" 2>/dev/null)" 2>/dev/null; rm -f "$M/srv-uvicorn.pid"; fi; }
@@ -28,7 +28,7 @@ probe() {
   local name=$1 port=$2 ver=$3
   for _ in $(seq 1 40); do
     local code
-    code=$(curl -s --max-time 3 ${ver:+--http2-prior-knowledge} -o "$M/p.bin" -w '%{http_code}' -X POST "http://127.0.0.1:$port/v1/echo" -H 'content-type: application/proto' --data-binary @/tmp/opencode/echo_req.bin 2>/dev/null)
+    code=$(curl -s --max-time 3 ${ver:+--http2-prior-knowledge} -o "$M/p.bin" -w '%{http_code}' -X POST "http://127.0.0.1:$port/easyrpc.conformance.v1.ConformanceService/Echo" -H 'content-type: application/proto' --data-binary @/tmp/opencode/echo_req.bin 2>/dev/null)
     if [ "$code" = "200" ]; then return 0; fi
     sleep 0.5
   done

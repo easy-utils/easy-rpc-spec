@@ -3,7 +3,6 @@ syntax = "proto3";
 package easyrpc.conformance.v1;
 
 option go_package = "github.com/easy-utils/easy-rpc-go/conformance/v1;conformancev1";
-import "google/api/annotations.proto";
 
 message EchoRequest { string input = 1; }
 message EchoResponse { string output = 1; }
@@ -18,49 +17,37 @@ message HealthRequest {}
 message HealthResponse { bool ok = 1; string name = 2; }
 
 service ConformanceService {
-  rpc Health(HealthRequest) returns (HealthResponse) {
-    option (google.api.http) = { get: "/v1/health" };
-  }
+  rpc Health(HealthRequest) returns (HealthResponse);
 
-  rpc Echo(EchoRequest) returns (EchoResponse) {
-    option (google.api.http) = { post: "/v1/echo" body: "*" };
-  }
+  rpc Echo(EchoRequest) returns (EchoResponse);
 
-  rpc Count(CountRequest) returns (stream CountResponse) {
-    option (google.api.http) = { post: "/v1/count" body: "*" };
-  }
+  rpc Count(CountRequest) returns (stream CountResponse);
 
-  rpc Fail(FailRequest) returns (FailResponse) {
-    option (google.api.http) = { post: "/v1/fail" body: "*" };
-  }
+  rpc Fail(FailRequest) returns (FailResponse);
 
   // Emit N frames then end the stream with a Connect end-stream error.
-  rpc StreamFail(StreamFailRequest) returns (stream StreamFailResponse) {
-    option (google.api.http) = { post: "/v1/stream-fail" body: "*" };
-  }
+  rpc StreamFail(StreamFailRequest) returns (stream StreamFailResponse);
 
   // Echo selected request metadata back in the response.
-  rpc EchoMeta(EchoMetaRequest) returns (EchoMetaResponse) {
-    option (google.api.http) = { post: "/v1/echo-meta" body: "*" };
-  }
+  rpc EchoMeta(EchoMetaRequest) returns (EchoMetaResponse);
 
-  // Return `size` bytes to exercise max-message behavior.
-  rpc Big(BigRequest) returns (BigResponse) {
-    option (google.api.http) = { post: "/v1/big" body: "*" };
-  }
+  // Return `size` bytes to exercise max-message behavior (and unary gzip).
+  rpc Big(BigRequest) returns (BigResponse);
 
   // Fail the unary call with an error carrying structured details.
-  rpc FailDetails(FailDetailsRequest) returns (FailDetailsResponse) {
-    option (google.api.http) = { post: "/v1/fail-details" body: "*" };
-  }
+  rpc FailDetails(FailDetailsRequest) returns (FailDetailsResponse);
 
   // Emit N frames, then fail the stream with an error carrying details.
-  rpc StreamFailDetails(StreamFailDetailsRequest) returns (stream StreamFailDetailsResponse) {
-    option (google.api.http) = { post: "/v1/stream-fail-details" body: "*" };
-  }
+  rpc StreamFailDetails(StreamFailDetailsRequest) returns (stream StreamFailDetailsResponse);
+
+  // Set unary trailing metadata (wire: response headers prefixed `trailer-`).
+  rpc EchoTrailer(EchoTrailerRequest) returns (EchoTrailerResponse);
+
+  // Set streaming trailing metadata (wire: END-frame JSON `metadata`).
+  rpc CountTrailer(CountTrailerRequest) returns (stream CountTrailerResponse);
 }
 
-// ---- Phase C additions: stream-end error + metadata + big payload ----
+// ---- stream-end error + metadata + big payload ----
 
 message StreamFailRequest {
   // Emit this many data frames, then fail with `code`.
@@ -97,3 +84,11 @@ message StreamFailDetailsRequest {
   string detail_text = 5;
 }
 message StreamFailDetailsResponse { int32 index = 1; }
+
+// ---- Trailing metadata conformance (spec §3.3) ----
+
+message EchoTrailerRequest { string input = 1; }
+message EchoTrailerResponse { string output = 1; }
+
+message CountTrailerRequest { int32 count = 1; }
+message CountTrailerResponse { int32 index = 1; }

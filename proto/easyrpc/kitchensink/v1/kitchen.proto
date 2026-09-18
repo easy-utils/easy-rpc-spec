@@ -6,12 +6,10 @@ syntax = "proto3";
 //  - map<k, v> (must stay a real map field, not repeated Entry)
 //  - oneof, nested messages, nested enums, top-level enums
 //  - cross-file import (shared.proto)
-//  - google.api.http GET + POST bindings, plus a no-annotation fallback
-//  - server-streaming method
+//  - multiple methods + server-streaming method (paths are gRPC-style)
 package easyrpc.kitchensink.v1;
 
 import "easyrpc/kitchensink/v1/shared.proto";
-import "google/api/annotations.proto";
 
 option go_package = "github.com/easy-utils/easy-rpc-go/kitchensink/v1;kitchensinkv1";
 
@@ -57,21 +55,13 @@ message NoRouteRequest { string q = 1; }
 message NoRouteResponse { string echoed = 1; }
 
 service ThingService {
-  rpc GetThing(GetThingRequest) returns (GetThingResponse) {
-    option (google.api.http) = { get: "/v1/things/{id}" };
-  }
-  rpc ListThings(ListThingsRequest) returns (ListThingsResponse) {
-    option (google.api.http) = { post: "/v1/things:list" body: "*" };
-  }
-  rpc WatchThings(WatchThingsRequest) returns (stream WatchThingsResponse) {
-    option (google.api.http) = { post: "/v1/things:watch" body: "*" };
-  }
-  rpc NoRoute(NoRouteRequest) returns (NoRouteResponse);  // no annotation -> fallback
+  rpc GetThing(GetThingRequest) returns (GetThingResponse);
+  rpc ListThings(ListThingsRequest) returns (ListThingsResponse);
+  rpc WatchThings(WatchThingsRequest) returns (stream WatchThingsResponse);
+  rpc NoRoute(NoRouteRequest) returns (NoRouteResponse);
 }
 
 // Second service in the SAME file: the generator must not drop it.
 service AdminThingService {
-  rpc Reset(NoRouteRequest) returns (NoRouteResponse) {
-    option (google.api.http) = { post: "/v1/admin:reset" body: "*" };
-  }
+  rpc Reset(NoRouteRequest) returns (NoRouteResponse);
 }
