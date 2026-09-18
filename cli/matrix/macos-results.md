@@ -124,3 +124,34 @@ DART_CRONET_ANDROID_ALL_PASS
 
 TLS 信任用**应用级 `network_security_config`**（`@raw/easyrpc_ca`），不依赖系统信任库——
 两个 transport（Kotlin/Dart）现均可在任意 Android 设备/模拟器上验证。
+
+## h3/QUIC 取证（Android 15 模拟器，应用级 CA）—— 结论与边界
+
+**问题**：新 `easyworker-android`（Android 15 / API 35）上 Cronet 的 `probe tls#N` 恒为 `(200, h2)`，
+即使 `addQuicHint` + 磁盘缓存 + 多次预热。
+
+**证据链**（`CronetEngine.startNetLogToFile` 抓的 netlog + 逐事件解码）：
+
+| 事件 | 观测 |
+|---|---|
+| `ALTERNATE_PROTOCOL` | `alt_svc: quic 172.17.0.196:18443, is_broken:false`（Caddy 广告被正常收录） |
+| `HTTP_STREAM_JOB` | `using_quic:true, type:"alternative"`（确实走 QUIC 分支） |
+| `UDP_CONNECT` | `172.17.0.196:18443`（UDP 真的发出，说明 guest→pod UDP 通） |
+| `QUIC_SESSION_CREATED` | 会话建立 |
+| `QUIC_SESSION_CERTIFICATE_VERIFIED` | `subjects: []` |
+| `QUIC_SESSION_CLOSED` | `TLS handshake failure (ENCRYPTION_HANDSHAKE) 46: certificate unknown … CERTIFICATE_VERIFY_FAILED, quic_error 199` |
+
+**判定**：HTTP/3 的协议链路本身没有问题（UDP 可达、QUIC 会话能建、Caddy 侧另有 h3 200 记录）。
+失败点是 **Chromium 的 QUIC 证书校验不读应用级 `network_security_config`（`@raw` 信任锚）**——
+HTTP/2 路径读、QUIC 路径回落系统信任库，于是握手因 "certificate unknown" 失败并自动降级 h2。
+
+**对照证据**：BlissOS round 里把 CA 装进**系统**信任库后，`probe -> (200, h3)` 成功；
+本 pod 内 `curl --http3-only https://172.17.0.196:18443` 亦为 HTTP/3 200。
+
+**边界与可选做法**：
+- 应用级信任 → h2 生效、h3 降级（本机默认，测试全绿）；
+- 系统信任库（需可写 `/system` 或真机 root / Magisk 模块）→ h3 生效（BlissOS 已验证）；
+- 或对 endpoint 使用公网可信证书（本 sandbox 无公网出口，未能 A/B）。
+
+**结论**：h3 功能已实证（BlissOS + pod 侧）；在本 Android-15 镜像上，受"应用级 CA 不被 QUIC 证书校验采信"限制，
+自动降级到 h2 且 RPC 全绿——降级行为本身也符合预期。
