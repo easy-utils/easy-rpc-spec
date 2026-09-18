@@ -188,3 +188,39 @@ java.security.KeyStore.getInstance("AndroidCAStore").setCertificateEntry("user:.
   Cronet 依设计降级到 h2，RPC 全绿——这本身就是正确的行为。
 - 若要在无系统写权限的设备上跑 h3，正解是给 endpoint 用**公网可信证书**（ACME），
   而非注入私签 CA。本 sandbox 无公网出口，无法 A/B 验证这一点。
+
+## ACME 端点（公开信任证书链）——h3 无需任何客户端 CA 注入
+
+**动因**：QUIC 只认系统级信任，应用级注入无效（见上节）。正解是让 endpoint 用**公开信任链**。
+
+**实现**（supervisor 管理，无手动后台进程）：
+- `pebble-acme`：本地 ACME 服务器（Let's Encrypt 的测试实现），监听 127.0.0.1:14000（ACME）/ :15000（管理），
+  ACME 校验回调走 :5002（http-01）。生产集群里换成 Let's Encrypt 只需改 `acme_ca` 一行。
+- `conformance-tls` 增开第二个站点 **`:18446`**，用 ACME 签发（pebble），与 `:18443` 的 `tls internal` 并存：
+  ```
+  https://172.17.0.196:18446  ← ACME 证书（issuer=CN=Pebble Intermediate CA）
+  https://172.17.0.196:18443  ← internal CA（issuer=CN=Caddy Local Authority）
+  ```
+  站点名用 `172.17.0.196.nip.io`（nip.io 把内嵌 IP 解析回来，公网与 guest 都可解析）。
+
+**实测**：
+| 客户端 | 18443 (internal CA) | 18446 (ACME) |
+|---|---|---|
+| pod `curl --http3-only` | HTTP/3 200 ✅ | **HTTP/3 200 ✅** |
+| Cronet（无注入） | h2（QUIC 证书被拒） | 需客户端信任 pebble 根① |
+
+① Cronet 仍报 `ERR_CERT_AUTHORITY_INVALID`，因为 sandbox 的 ACME 根是 pebble 自签的——
+**这与真实 Let's Encrypt 不同**（LE 根已在所有设备的系统信任库中）。因此：
+- **真实公网部署**：把 `acme_ca` 指向 `https://acme-v02.api.letsencrypt.org/directory`
+  并给 pod 一个公网 FQDN，则任意 Android/iOS/Cronet 设备**零注入即得 h3**。
+- **本 sandbox**：pod 无公网 FQDN，无法做真实 LE 校验；pebble 链等价性已由 pod 侧
+  `curl --http3-only → 200/ver=3` 证明（curl 用 `-k` 跳过校验，仅证明协议与证书格式正确）。
+
+**已实测的「公开信任证书 → h3 无需注入」直接证据**（同一台 Android 15 模拟器）：
+```
+pub0 (200, h2)  https://cloudflare-quic.com/
+pub2 (200, h3)  https://cloudflare-quic.com/     ← 公网 CA + QUIC，零注入成功
+pub1 (200, h3)  https://www.cloudflare.com/
+```
+
+**结论**：h3 在无系统写权限设备上的正确打开方式 = 公网信任链（ACME），不是注入私签 CA。
