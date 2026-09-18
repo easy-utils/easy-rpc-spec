@@ -3,6 +3,8 @@ syntax = "proto3";
 package easyrpc.conformance.v1;
 
 option go_package = "github.com/easy-utils/easy-rpc-go/conformance/v1;conformancev1";
+option java_multiple_files = true;
+option java_package = "com.easyrpc.conformance.v1";
 
 message EchoRequest { string input = 1; }
 message EchoResponse { string output = 1; }

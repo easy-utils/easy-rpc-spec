@@ -16,7 +16,6 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 # Module root == OUT so generated paths are `easyrpc/...` everywhere.
 cp -r "$SPEC_ROOT/proto/easyrpc" "$OUT/"
-cp -r "$SPEC_ROOT/proto/google" "$OUT/"
 cat > "$OUT/buf.yaml" <<'YAML'
 version: v2
 modules:
