@@ -102,6 +102,24 @@ if want_lang matrix; then
   done
 fi
 
+# ---- raw-wire oracle (curl-only; independent of every implementation) ----
+if want_lang rawwire; then
+  for port in 18888 18889 18887; do
+    if "$SPEC_ROOT/cli/raw-wire.sh" "http://127.0.0.1:$port" >"/tmp/opencode/run-all-rawwire-$port.log" 2>&1
+    then ok "raw-wire-vs-$port"; else bad "raw-wire-vs-$port"; fi
+  done
+fi
+
+# ---- wire golden vectors (transport-independent protocol conformance) ----
+if want_lang vectors; then
+  okv=0; badv=0
+  if ( cd "$EASY_UTILS/easy-rpc-ts" && npx vitest run tests/wire-vectors.test.ts ) >/tmp/opencode/run-all-vectors-ts.log 2>&1; then okv=$((okv+1)); else badv=$((badv+1)); bad "vectors-ts"; fi
+  if ( cd "$EASY_UTILS/easy-rpc-go" && go test -run TestWireVectors . ) >/tmp/opencode/run-all-vectors-go.log 2>&1; then okv=$((okv+1)); else badv=$((badv+1)); bad "vectors-go"; fi
+  if ( cd "$EASY_UTILS/easy-rpc-rust" && cargo test --test wire_vectors ) >/tmp/opencode/run-all-vectors-rust.log 2>&1; then okv=$((okv+1)); else badv=$((badv+1)); bad "vectors-rust"; fi
+  if ( cd "$EASY_UTILS/easy-rpc-python" && python3 tests/wire_vectors_test.py ) >/tmp/opencode/run-all-vectors-python.log 2>&1; then okv=$((okv+1)); else badv=$((badv+1)); bad "vectors-python"; fi
+  [ "$badv" -eq 0 ] && ok "vectors ($okv/4 languages)"
+fi
+
 # ---- golden + compile-matrix ----
 if want_lang golden; then
   if ( "$SPEC_ROOT/cli/golden/gen-golden.sh" && EASYRPC_BIN=/tmp/opencode/bin "$SPEC_ROOT/cli/golden/compile-matrix.sh" ) \

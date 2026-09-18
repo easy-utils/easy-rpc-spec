@@ -3,6 +3,7 @@
 set -u
 EASY_RPC_BASE="${EASY_RPC_BASE:-http://127.0.0.1:18888}"
 export EASY_RPC_BASE
+export EASY_RPC_TRANSPORT="${EASY_RPC_TRANSPORT:-}"
 if ( cd /home/user/easy-utils/easy-rpc-csharp && rm -rf obj bin tests/obj tests/bin && dotnet test tests/tests.csproj >/tmp/opencode/matrix/cli-csharp.log 2>&1 ); then
   echo "PASS"
 else

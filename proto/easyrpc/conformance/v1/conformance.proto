@@ -47,7 +47,33 @@ service ConformanceService {
 
   // Set streaming trailing metadata (wire: END-frame JSON `metadata`).
   rpc CountTrailer(CountTrailerRequest) returns (stream CountTrailerResponse);
+
+  // Echo arbitrary bytes (non-UTF-8 round-trip).
+  rpc EchoBytes(EchoBytesRequest) returns (EchoBytesResponse);
+
+  // Sleep `millis`, then return. Exercises `connect-timeout-ms` (M12/M13).
+  rpc Sleep(SleepRequest) returns (SleepResponse);
+
+  // Empty message round-trip (no fields set).
+  rpc Empty(EmptyRequest) returns (EmptyResponse);
+
+  // Emit `count` frames of `size` bytes each (gzip boundary + big stream).
+  rpc BigStream(BigStreamRequest) returns (stream BigStreamResponse);
 }
+
+// ---- bytes / deadline / empty / big-stream ----
+
+message EchoBytesRequest { bytes data = 1; }
+message EchoBytesResponse { bytes data = 1; }
+
+message SleepRequest { int32 millis = 1; }
+message SleepResponse { bool ok = 1; }
+
+message EmptyRequest {}
+message EmptyResponse {}
+
+message BigStreamRequest { int32 count = 1; int32 size = 2; }
+message BigStreamResponse { int32 index = 1; int32 size = 2; }
 
 // ---- stream-end error + metadata + big payload ----
 

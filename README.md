@@ -134,7 +134,7 @@ service ConformanceService {
 ### 3.6 协议版本
 
 - 客户端在**每个请求**携带 `Connect-Protocol-Version: 1`（unary 与 stream 均发送）。
-- 服务端若收到显式且不支持的版本，拒绝：unary → HTTP 400 + 错误体 code=12；
+- 服务端若收到显式且不支持的版本，拒绝：unary → HTTP 501（code=12 = unimplemented）+ 错误体 code=12；
   stream → HTTP 400（无 END 帧）。缺失视为兼容。
 
 ### 3.7 拦截器（内建扩展点）
@@ -345,19 +345,63 @@ Response { status: int, headers: Headers, body: Bytes, trailers: Headers }
 ## 8. Conformance（验证）
 
 标准服务定义见 `proto/easyrpc/conformance/v1/`：
-- unary：`Echo`、`Health`
-- server-stream：`Count`（计数推送）
+- unary：`Echo`、`Health`、`Empty`、`EchoBytes`（非 UTF-8）
+- server-stream：`Count`、`BigStream`（多帧 / gzip 边界）
 - 错误用例：`Fail`、`StreamFail`
 - 错误 details：`FailDetails`、`StreamFailDetails`
 - 元数据：`EchoMeta`（请求 metadata 回显）、`EchoTrailer`（unary trailer）、
   `CountTrailer`（streaming trailing metadata）
-- 边界：`Big`（大 payload，含 unary gzip）、空消息、非 UTF-8
+- 截止时间：`Sleep`（服务端 sleep → `connect-timeout-ms` → code 4）
+- 边界：`Big`（大 payload，含 unary gzip）
 
-验证方式：
-- §4.2 **错误路径矩阵** M1–M16：各语言单元测试直接对 `decode*`/帧解码函数构造输入。
-- §4.3 **故障注入矩阵** F1–F6。
-- **互通**：同一 `Transport` 跨 Go 服务端 ↔ 各语言客户端互测。
-- **真 ConnectRPC 双向互测**：`@connectrpc/connect` 客户端 ↔ easy-rpc 服务端，及反向。
+### 8.1 四层验证（协议 / transport 解耦）
+
+| 层 | 位置 | 依赖 transport？ | 作用 |
+|----|------|:---:|------|
+| **Wire 向量** | `conformance/wire-vectors.json` + 各语言 `wire_vectors*` 测试 | **否**（纯协议层） | 唯一能抓"两个实现同源 bug"的 oracle：帧、END 帧、错误 JSON、trailer mux/demux、码表必须字节/语义一致 |
+| **故障注入** | 各语言 `fault_injection*` 测试 | 是（mock socket） | F1–F6 畸形流 body |
+| **Raw-wire oracle** | `cli/raw-wire.sh` | 否（仅 curl） | 独立于所有实现，校验真实 HTTP 线上契约（路径/状态码/415/404/trailer/END 字节） |
+| **互通矩阵** | `cli/matrix/run-matrix.sh` | 是 | (client × transport) × (server) 全组合 |
+
+**协议正确性** = Wire 向量 + 故障注入 + 真 `@connectrpc` 双向互测（`easy-rpc-ts/tests/connectrpc-interop.test.ts`）。
+**transport 正确性** = 互通矩阵里每个 client 用**每个** transport 跑同一份 checklist（`EASY_RPC_TRANSPORT` 选择）。
+
+### 8.2 transport 轴（`EASY_RPC_TRANSPORT`）
+
+统一词表（spec §7.1）：未设 = 各语言默认。
+
+| 语言 | 取值 |
+|------|------|
+| TS | `fetch` `node` `h1` `auto` |
+| Go | `std` `auto` |
+| Rust | `reqwest` `hyper` |
+| Python | `std`（`auto` 需 aioquic） |
+| Kotlin | `okhttp` `cio`（`cronet` 见 device matrix） |
+| C# | `h1` `h2` `h3` |
+| Swift | `urlsession` `ahc` |
+| Dart | `io` `http2`（`cronet`/`cupertino`/`fetch` 见 device matrix） |
+
+设备专用 transport（Cronet/Cupertino/URLSession-h3）无法在 Linux pod 运行，见
+`cli/matrix/device-matrix.sh`（在对应 worker 上执行）。
+
+### 8.3 错误路径矩阵 M1–M16
+
+各语言单元测试直接对 `decode*`/帧解码函数构造输入（`wire-vectors.json` 是
+跨语言共享的字节级来源）。
+
+### 8.4 故障注入矩阵 F1–F6
+
+| # | 输入 | 期望行为 |
+|---|------|----------|
+| F1 | body 在帧中段截断（EOF 时半帧） | 错误（code=13 truncated frame），已完整收到的帧正常交付 |
+| F2 | body 在帧边界结束但**无 END 帧** | 错误（code=13 stream ended without END frame） |
+| F3 | END 帧 payload 为垃圾字节 | 同 M2：干净结束，不抛 |
+| F4 | 压缩位置位但 gzip 损坏 | 错误（code=13 corrupt gzip frame），**绝不**把原始压缩字节当 payload 交付 |
+| F5 | 帧被任意切成小 chunk 传输 | 正确重组（读取器必须累积） |
+| F6 | 合法 gzip 帧 | 正常解压交付 |
+
+**gzip wire 语义**：压缩帧一律 RFC-1952 gzip wrapper（`1f 8b` 魔数）。
+压缩是**机会性**的；解压是**严格**的。
 
 ---
 

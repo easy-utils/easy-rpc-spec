@@ -1,0 +1,20 @@
+{
+  "$schema": "easy-rpc shared conformance checklist v1",
+  "description": "The single source of truth for the cross-language interop checklist. Every client language must exercise every case against every server. Cases are grouped by shape; `transportIndependent: false` means the case depends on negotiated transport behaviour (streaming/trailers) and is still expected to pass on every transport, but the assertion should include the transport name for diagnostics.",
+  "service": "easyrpc.conformance.v1.ConformanceService",
+  "cases": [
+    { "id": "health",         "rpc": "Health",         "shape": "unary",  "expect": "ok==true" },
+    { "id": "echo",           "rpc": "Echo",           "shape": "unary",  "input": "hi", "expect": "output=='echo:hi'" },
+    { "id": "count-3",        "rpc": "Count",          "shape": "stream", "count": 3, "expect": "indices==[0,1,2]" },
+    { "id": "count-0",        "rpc": "Count",          "shape": "stream", "count": 0, "expect": "server default (3) or empty per impl; must not error" },
+    { "id": "fail-ok",        "rpc": "Fail",           "shape": "unary",  "message": "", "expect": "ok==true" },
+    { "id": "fail-err",       "rpc": "Fail",           "shape": "unary",  "message": "nope", "expect": "RPCError code==3" },
+    { "id": "failDetails",    "rpc": "FailDetails",    "shape": "unary",  "expect": "RPCError code==8 + details[0].type/value" },
+    { "id": "streamFail",     "rpc": "StreamFail",     "shape": "stream", "emitBefore": 2, "expect": "frames [0,1] then RPCError code==13" },
+    { "id": "streamFailDetails","rpc": "StreamFailDetails","shape": "stream","emitBefore": 2, "expect": "frames then code==13 + details" },
+    { "id": "echoMeta",       "rpc": "EchoMeta",       "shape": "unary",  "header": { "x-test": "abc" }, "expect": "meta['x-test']=='abc'" },
+    { "id": "echoTrailer",    "rpc": "EchoTrailer",    "shape": "unary",  "expect": "output=='trailer:x' + trailer x-trl==['unary-x']" },
+    { "id": "countTrailer",   "rpc": "CountTrailer",   "shape": "stream", "count": 2, "expect": "indices==[0,1] + trailer x-ctrailer==['done']" },
+    { "id": "big",            "rpc": "Big",            "shape": "unary",  "size": 100000, "expect": "size==100000 (gzip-transparent)" }
+  ]
+}
