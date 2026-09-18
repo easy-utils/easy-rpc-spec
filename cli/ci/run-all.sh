@@ -9,7 +9,8 @@
 # No ad-hoc background processes are started by this script.
 #
 # Usage:  ./run-all.sh [lang...]     (default: all)
-#         langs: ts go rust python dart kotlin csharp swift matrix golden
+#         langs: ts go rust python dart kotlin csharp swift matrix
+#                rawwire h2 vectors golden
 # Exit 0 => everything green.
 set -u
 cd "$(dirname "$0")/../.."
@@ -104,9 +105,22 @@ fi
 
 # ---- raw-wire oracle (curl-only; independent of every implementation) ----
 if want_lang rawwire; then
+  # go/rust/python advertise h1+h2c; ts-http is h1-only.
+  if "$SPEC_ROOT/cli/raw-wire.sh" "http://127.0.0.1:18888" "h1,h2c" >"/tmp/opencode/run-all-rawwire-18888.log" 2>&1
+  then ok "raw-wire-vs-18888"; else bad "raw-wire-vs-18888"; fi
+  if "$SPEC_ROOT/cli/raw-wire.sh" "http://127.0.0.1:18889" "h1,h2c" >"/tmp/opencode/run-all-rawwire-18889.log" 2>&1
+  then ok "raw-wire-vs-18889"; else bad "raw-wire-vs-18889"; fi
+  if "$SPEC_ROOT/cli/raw-wire.sh" "http://127.0.0.1:18887" "h1,h2c" >"/tmp/opencode/run-all-rawwire-18887.log" 2>&1
+  then ok "raw-wire-vs-18887"; else bad "raw-wire-vs-18887"; fi
+  if "$SPEC_ROOT/cli/raw-wire.sh" "http://127.0.0.1:18899" "h1" >"/tmp/opencode/run-all-rawwire-18899.log" 2>&1
+  then ok "raw-wire-vs-18899"; else bad "raw-wire-vs-18899"; fi
+fi
+
+# ---- h2 same-connection multiplexing oracle (h2 lib only) ----
+if want_lang h2; then
   for port in 18888 18889 18887; do
-    if "$SPEC_ROOT/cli/raw-wire.sh" "http://127.0.0.1:$port" >"/tmp/opencode/run-all-rawwire-$port.log" 2>&1
-    then ok "raw-wire-vs-$port"; else bad "raw-wire-vs-$port"; fi
+    if python3 "$SPEC_ROOT/cli/h2-concurrent.py" 127.0.0.1 "$port" >"/tmp/opencode/run-all-h2-$port.log" 2>&1
+    then ok "h2-concurrent-vs-$port"; else bad "h2-concurrent-vs-$port"; fi
   done
 fi
 

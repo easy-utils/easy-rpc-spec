@@ -134,8 +134,8 @@ service ConformanceService {
 ### 3.6 协议版本
 
 - 客户端在**每个请求**携带 `Connect-Protocol-Version: 1`（unary 与 stream 均发送）。
-- 服务端若收到显式且不支持的版本，拒绝：unary → HTTP 501（code=12 = unimplemented）+ 错误体 code=12；
-  stream → HTTP 400（无 END 帧）。缺失视为兼容。
+- 服务端若收到显式且不支持的版本，拒绝：unary 与 stream 均为 HTTP 501
+  （code=12 = unimplemented）+ 错误体 code=12（stream 无 END 帧）。缺失视为兼容。
 
 ### 3.7 拦截器（内建扩展点）
 
@@ -360,12 +360,16 @@ Response { status: int, headers: Headers, body: Bytes, trailers: Headers }
 |----|------|:---:|------|
 | **Wire 向量** | `conformance/wire-vectors.json` + 各语言 `wire_vectors*` 测试 | **否**（纯协议层） | 唯一能抓"两个实现同源 bug"的 oracle：帧、END 帧、错误 JSON、trailer mux/demux、码表必须字节/语义一致 |
 | **故障注入** | 各语言 `fault_injection*` 测试 | 是（mock socket） | F1–F6 畸形流 body |
-| **Raw-wire oracle** | `cli/raw-wire.sh` | 否（仅 curl） | 独立于所有实现，校验真实 HTTP 线上契约（路径/状态码/415/404/trailer/END 字节） |
+| **Raw-wire oracle** | `cli/raw-wire.sh` | 否（仅 curl） | 独立于所有实现，校验真实 HTTP 线上契约：**全部 16 个 Connect code**、流边界 0/N/error、非法请求（verb/path/content-type/version/encoding）/畸形信封（截断/oversize/corrupt-gzip 标志）/limits/metadata/HTTP 版本协商 |
+| **h2 并发 oracle** | `cli/h2-concurrent.py` | 是（h2 库） | 单条 h2c 连接上并发多路 server-stream：无串扰、真正交错、流后连接可复用 |
 | **互通矩阵** | `cli/matrix/run-matrix.sh` | 是 | (client × transport) × (server) 全组合 |
 | **官方 ConnectRPC suite** | `conformance/official/run-official.sh` | 是 | 用 vendored 官方 proto + `connectconformance` runner 对表（可编程 `ConformanceService`），server 侧 292/292（h1+h2c、proto、identity+gzip、unary+server-stream） |
 
 **协议正确性** = Wire 向量 + 故障注入 + 真 `@connectrpc` 双向互测（`easy-rpc-ts/tests/connectrpc-interop.test.ts`）+ 官方 suite。
-**transport 正确性** = 互通矩阵里每个 client 用**每个** transport 跑同一份 checklist（`EASY_RPC_TRANSPORT` 选择）。
+**transport 正确性** = 互通矩阵里每个 client 用**每个** transport 跑同一份 checklist（`EASY_RPC_TRANSPORT` 选择）+ raw-wire / h2 并发 oracle。
+
+共享清单见 `conformance/checklist.json`（v2）：client 用例 + server 侧
+（16 码、流边界、非法请求、畸形信封、limits、metadata、HTTP 版本、取消）。
 
 ### 8.2 transport 轴（`EASY_RPC_TRANSPORT`）
 
