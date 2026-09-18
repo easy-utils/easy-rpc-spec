@@ -90,3 +90,19 @@ Android ABI .so），用 **API 500 + cronet-fallback 119（纯 Java h1）+ andro
 - Kotlin CronetTransport 真 h2/h3（TLS 信任：模拟器系统 CA 或注入引擎）
 - Dart CronetHttpTransport 运行时（同上）
 - worker 复用工程：cmp `cronet-verify/`、flutter `ccheck/`
+
+### Dart cronet_http 运行时（BlissOS 模拟器实测：受限于上游 bug）
+
+工程 `ccheck`（flutter worker）/ `cronet-dart*.apk`（Kotlin MainActivity 已修正 package 对齐）。
+现象：同引擎（embedded cronet 151, x86_64）、同 manifest（INTERNET + ACCESS_NETWORK_STATE）、
+同 TLS 信任（系统 CA 已装），**Kotlin 原生 UrlRequest 全绿，cronet_http(Dart/jnigen) 全部请求
+`net::ERR_ACCESS_DENIED (-10)`**——h1 明文、TLS、quic-hint、GMS/嵌入式 provider、
+enablePublicKeyPinningBypass 组合均复现。
+
+判定：cronet_http 1.8（jnigen 绑定）在请求线程身份/网络标签上的缺陷——cronet 以发起线程的
+binder 身份做权限检查，jnigen 回调线程未携带应用的 INTERNET 网络标签（Kotlin 路径无此问题）。
+属上游包问题，非 easy-rpc 传输层问题；Dart CronetHttpTransport 代码已按 1.9 API 重写并在
+flutter worker 通过真实编译（`flutter test`：`cronet transport constructs`），待上游修复或换
+jni 手动打标签后即可运行。
+
+**Cronet 的权威验证路径 = easy-rpc-kotlin `CronetTransport`（见上节，全绿）。**
