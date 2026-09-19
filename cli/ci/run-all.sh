@@ -74,8 +74,12 @@ if want_lang dart; then
   else skip "dart (no toolchain)"; fi
 fi
 if want_lang kotlin; then
-  if command -v gradle >/dev/null 2>&1; then
-    run kotlin "$EASY_UTILS/easy-rpc-kotlin" gradle test
+  if command -v gradle >/dev/null 2>&1 || [ -x /opt/tools/mise/installs/gradle/latest/gradle-9.7.0/bin/gradle ]; then
+    GRADLE_BIN="${GRADLE_BIN:-/opt/tools/mise/installs/gradle/latest/gradle-9.7.0/bin/gradle}"
+    # KMP: JVM + JS + Wasm + Linux x64 (arm64 links but cannot execute on x64).
+    if ( cd "$EASY_UTILS/easy-rpc-kotlin" && "$GRADLE_BIN" jvmTest jsNodeTest wasmJsNodeTest linuxX64Test --no-daemon ) \
+      >/tmp/opencode/run-all-kotlin.log 2>&1
+    then ok kotlin; else bad kotlin; fi
   else skip "kotlin (no toolchain)"; fi
 fi
 if want_lang csharp; then
