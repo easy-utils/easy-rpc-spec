@@ -1,11 +1,12 @@
-# easy-rpc 协议契约 v2（权威）
+# easy-rpc 协议契约 v3（权威）
 
 本文件是 easy-rpc 所有语言实现的**唯一权威**。实现、测试、生成器均以此为准。
 
-- 版本：v2
+- 版本：v3
 - 状态：稳定
 - 定位：**Connect 协议的一个简化子集**——保留与 `@connectrpc/*` 的**双向 wire 互通**，
-  砍掉未使用的能力（JSON 消息编解码、GET、gRPC、gRPC-Web、client/bidi streaming、REST/transcoding）。
+  支持 proto 与 proto3 JSON 两个 codec；砍掉未使用的能力（GET、gRPC、gRPC-Web、
+  client/bidi streaming、REST/transcoding）。
 
 ---
 
@@ -14,7 +15,7 @@
 | 项 | 定案 |
 |----|------|
 | Schema | proto3 |
-| 消息编码 | **仅 proto 二进制**（无 JSON codec；错误信封除外，见 §4） |
+| 消息编码 | **proto 二进制（默认）+ proto3 JSON codec**（§2；错误信封见 §4） |
 | 协议 | **仅 Connect wire**（无 grpc / grpc-web） |
 | HTTP 动词 | **仅 POST**（无 GET；无 REST / `google.api.http` / transcoding） |
 | 路径 | **`/<pkg>.<Service>/<Method>`**（gRPC 风格，唯一形态） |
@@ -53,14 +54,28 @@ service ConformanceService {
 
 仅 proto：
 
-| 形状 | Content-Type |
-|------|--------------|
-| unary 请求/响应 | `application/proto` |
-| server-stream 请求/响应 | `application/connect+proto` |
+easy-rpc 支持两个 **codec**：`proto`（二进制，默认）与 `json`（proto3 JSON）。
+codec 由请求的 Content-Type 决定；响应跟随请求 codec。
 
-- 服务端必须接受 `application/proto`（unary）与 `application/connect+proto`（stream）。
-- `application/json`、`application/connect+json` **不再支持**：收到即 `415 Unsupported Media Type`
-  （unary：HTTP 415 + Connect 错误体 code=3；stream：HTTP 415，无 END 帧）。
+| 形状 / codec | proto | json |
+|--------------|-------|------|
+| unary 请求/响应 | `application/proto` | `application/json` |
+| server-stream 请求/响应 | `application/connect+proto` | `application/connect+json` |
+
+- 服务端**必须**接受 `application/proto`（unary）与 `application/connect+proto`（stream）；
+  **应当**接受 `application/json` / `application/connect+json`（JSON codec）。
+- 消息 body 采用 proto3 JSON 映射（`protojson` 语义）：字段名 lowerCamelCase、
+  `int64`/`uint64` 编码为字符串、`bytes` 为 base64、`enum` 为名字、`map` 为对象、
+  `Any` 需 `@type`；解析时**忽略未知字段**。
+- **JSON 仅改消息编码**：帧信封（§3）不变，server-stream 的每条数据帧 payload 是该
+  message 的 JSON（仍是 `[1B flags][4B len][json]`）；END 帧的 Connect end-stream JSON
+  与错误信封（§4）本来就是 JSON，不受 codec 影响。
+- 空 message 在 JSON 下是 `{}`（**不接受**零长度 payload —— 详见 §3.1）。
+- 未知/不支持的 Content-Type：**unary** → HTTP 415 + Connect 错误体 code=2（unknown）；
+  **stream** → HTTP 415，无 END 帧。合法但未实现的 codec（若某实现只做 proto）同样 415。
+- 请求侧压缩（§3.5）：unary 用 `Content-Encoding: gzip`，stream 用
+  `Connect-Content-Encoding: gzip`；两者都与 codec 正交。
+- 响应 Content-Type 使用与请求 codec 对应的值（json 请求 → json 响应）。
 
 ---
 
@@ -79,8 +94,10 @@ service ConformanceService {
   **Connect end-stream JSON**（见 §3.2）——这是 Connect 信封的一部分，不通融为 proto。
 
 ### 3.1 unary
-- 请求：`POST`，body = 请求 message 的 proto 二进制（无帧）。
-- 成功：HTTP 200，body = 响应 message 的 proto 二进制。
+- 请求：`POST`，body = 请求 message 的编码（proto 二进制，或 JSON 对象）。
+- 成功：HTTP 200，body = 响应 message 的编码（同上）。
+- 空 message：proto 下是零长度 body；JSON 下必须是 `{}`（零长度 JSON payload
+  不是合法 JSON 对象，按 code=13 处理）。
 - 错误：见 §4。
 
 ### 3.2 server-stream

@@ -1,6 +1,6 @@
 # Features of an easy-rpc server under test (the simplified Connect subset):
-# proto codec only, Connect protocol only, unary + server-stream only,
-# identity + gzip compression, h1 and h2c. Client/bidi streaming, JSON, and
+# proto + proto3 JSON codecs, Connect protocol only, unary + server-stream
+# only, identity + gzip compression, h1 and h2c. Client/bidi streaming and
 # Connect-over-GET are intentionally unsupported.
 features:
   versions:
@@ -10,6 +10,7 @@ features:
     - PROTOCOL_CONNECT
   codecs:
     - CODEC_PROTO
+    - CODEC_JSON
   compressions:
     - COMPRESSION_IDENTITY
     - COMPRESSION_GZIP
