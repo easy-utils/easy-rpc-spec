@@ -381,7 +381,7 @@ Response { status: int, headers: Headers, body: Bytes, trailers: Headers }
 | **h2 并发 oracle** | `cli/h2-concurrent.py` | 是（h2 库） | 单条 h2c 连接上并发多路 server-stream：无串扰、真正交错、流后连接可复用 |
 | **h3 并发 oracle** | `cli/h3-concurrent.py` | 是（aioquic） | 单条 QUIC 连接上并发多路 h3 server-stream：无串扰、真正交错、流后连接可复用（自签 CA + IP-SAN 即可，对 caddy `tls internal` 端点） |
 | **互通矩阵** | `cli/matrix/run-matrix.sh` | 是 | (client × transport) × (server) 全组合 |
-| **官方 ConnectRPC suite** | `conformance/official/run-official.sh` | 是 | 用 vendored 官方 proto + `connectconformance` runner 对表（可编程 `ConformanceService`），server 侧 292/292（h1+h2c、proto、identity+gzip、unary+server-stream） |
+| **官方 ConnectRPC suite** | `conformance/official/run-official.sh` | 是 | 用 vendored 官方 proto + `connectconformance` runner 对表（可编程 `ConformanceService`），server 侧 564/564（h1+h2c、proto+json、identity+gzip、unary+server-stream） |
 
 **协议正确性** = Wire 向量 + 故障注入 + 真 `@connectrpc` 双向互测（`easy-rpc-ts/tests/connectrpc-interop.test.ts`）+ 官方 suite。
 **transport 正确性** = 互通矩阵里每个 client 用**每个** transport 跑同一份 checklist（`EASY_RPC_TRANSPORT` 选择）+ raw-wire / h2 并发 oracle。

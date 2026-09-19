@@ -1,81 +1,386 @@
 {
-  "$schema": "easy-rpc shared conformance checklist v2",
+  "$schema": "easy-rpc shared conformance checklist v3",
   "description": "The single source of truth for the cross-language conformance surface. Every client language must exercise every 'client' case against every server; the 'server' section is validated language-independently by cli/raw-wire.sh and the official ConnectRPC suite. `transportIndependent: false` means the case depends on negotiated transport behaviour (streaming/trailers) and is still expected to pass on every transport, but the assertion should include the transport name for diagnostics.",
   "service": "easyrpc.conformance.v1.ConformanceService",
   "notes": [
-    "Binary (`-bin`) metadata is NOT part of the easy-rpc subset (spec §2: proto-only, no Connect binary-header suffix).",
+    "Codec axis: every client/server case runs with both `proto` (default) and `json` (proto3 JSON) where the shape supports it; JSON changes only the message encoding.",
+    "Binary (`-bin`) metadata is NOT part of the easy-rpc subset (spec \u00a72: proto-only, no Connect binary-header suffix).",
     "Response-header echo is validated against all four server languages by the official ConnectRPC suite (programmable ConformanceService response_headers); the fixed service does not expose setHeader via an RPC.",
     "All 16 Connect codes are driven through FailDetails/StreamFail, which take the code from the request."
   ],
   "cases": [
-    { "id": "health",         "rpc": "Health",         "shape": "unary",  "expect": "ok==true" },
-    { "id": "echo",           "rpc": "Echo",           "shape": "unary",  "input": "hi", "expect": "output=='echo:hi'" },
-    { "id": "count-3",        "rpc": "Count",          "shape": "stream", "count": 3, "expect": "indices==[0,1,2]" },
-    { "id": "count-0",        "rpc": "Count",          "shape": "stream", "count": 0, "expect": "server default (3) or empty per impl; must not error" },
-    { "id": "fail-ok",        "rpc": "Fail",           "shape": "unary",  "message": "", "expect": "ok==true" },
-    { "id": "fail-err",       "rpc": "Fail",           "shape": "unary",  "message": "nope", "expect": "RPCError code==3" },
-    { "id": "failDetails",    "rpc": "FailDetails",    "shape": "unary",  "expect": "RPCError code==8 + details[0].type/value" },
-    { "id": "streamFail",     "rpc": "StreamFail",     "shape": "stream", "emitBefore": 2, "expect": "frames [0,1] then RPCError code==13" },
-    { "id": "streamFailDetails","rpc": "StreamFailDetails","shape": "stream","emitBefore": 2, "expect": "frames then code==13 + details" },
-    { "id": "echoMeta",       "rpc": "EchoMeta",       "shape": "unary",  "header": { "x-test": "abc" }, "expect": "meta['x-test']=='abc'" },
-    { "id": "echoTrailer",    "rpc": "EchoTrailer",    "shape": "unary",  "expect": "output=='trailer:x' + trailer x-trl==['unary-x']" },
-    { "id": "countTrailer",   "rpc": "CountTrailer",   "shape": "stream", "count": 2, "expect": "indices==[0,1] + trailer x-ctrailer==['done']" },
-    { "id": "big",            "rpc": "Big",            "shape": "unary",  "size": 100000, "expect": "size==100000 (gzip-transparent)" },
-    { "id": "echoBytes",      "rpc": "EchoBytes",      "shape": "unary",  "dataHex": "000102fffe80", "expect": "data round-trips byte-for-byte" },
-    { "id": "empty",          "rpc": "Empty",          "shape": "unary",  "expect": "EmptyResponse returned (no fields)" },
-    { "id": "sleep",          "rpc": "Sleep",          "shape": "unary",  "millis": 200, "timeoutMs": 50, "expect": "RPCError code==4 (deadline_exceeded)" },
-    { "id": "bigStream",      "rpc": "BigStream",      "shape": "stream", "count": 4, "size": 2048, "expect": "indices==[0,1,2,3]" }
+    {
+      "id": "health",
+      "rpc": "Health",
+      "shape": "unary",
+      "expect": "ok==true"
+    },
+    {
+      "id": "echo",
+      "rpc": "Echo",
+      "shape": "unary",
+      "input": "hi",
+      "expect": "output=='echo:hi'"
+    },
+    {
+      "id": "count-3",
+      "rpc": "Count",
+      "shape": "stream",
+      "count": 3,
+      "expect": "indices==[0,1,2]"
+    },
+    {
+      "id": "count-0",
+      "rpc": "Count",
+      "shape": "stream",
+      "count": 0,
+      "expect": "server default (3) or empty per impl; must not error"
+    },
+    {
+      "id": "fail-ok",
+      "rpc": "Fail",
+      "shape": "unary",
+      "message": "",
+      "expect": "ok==true"
+    },
+    {
+      "id": "fail-err",
+      "rpc": "Fail",
+      "shape": "unary",
+      "message": "nope",
+      "expect": "RPCError code==3"
+    },
+    {
+      "id": "failDetails",
+      "rpc": "FailDetails",
+      "shape": "unary",
+      "expect": "RPCError code==8 + details[0].type/value"
+    },
+    {
+      "id": "streamFail",
+      "rpc": "StreamFail",
+      "shape": "stream",
+      "emitBefore": 2,
+      "expect": "frames [0,1] then RPCError code==13"
+    },
+    {
+      "id": "streamFailDetails",
+      "rpc": "StreamFailDetails",
+      "shape": "stream",
+      "emitBefore": 2,
+      "expect": "frames then code==13 + details"
+    },
+    {
+      "id": "echoMeta",
+      "rpc": "EchoMeta",
+      "shape": "unary",
+      "header": {
+        "x-test": "abc"
+      },
+      "expect": "meta['x-test']=='abc'"
+    },
+    {
+      "id": "echoTrailer",
+      "rpc": "EchoTrailer",
+      "shape": "unary",
+      "expect": "output=='trailer:x' + trailer x-trl==['unary-x']"
+    },
+    {
+      "id": "countTrailer",
+      "rpc": "CountTrailer",
+      "shape": "stream",
+      "count": 2,
+      "expect": "indices==[0,1] + trailer x-ctrailer==['done']"
+    },
+    {
+      "id": "big",
+      "rpc": "Big",
+      "shape": "unary",
+      "size": 100000,
+      "expect": "size==100000 (gzip-transparent)"
+    },
+    {
+      "id": "echoBytes",
+      "rpc": "EchoBytes",
+      "shape": "unary",
+      "dataHex": "000102fffe80",
+      "expect": "data round-trips byte-for-byte"
+    },
+    {
+      "id": "empty",
+      "rpc": "Empty",
+      "shape": "unary",
+      "expect": "EmptyResponse returned (no fields)"
+    },
+    {
+      "id": "sleep",
+      "rpc": "Sleep",
+      "shape": "unary",
+      "millis": 200,
+      "timeoutMs": 50,
+      "expect": "RPCError code==4 (deadline_exceeded)"
+    },
+    {
+      "id": "bigStream",
+      "rpc": "BigStream",
+      "shape": "stream",
+      "count": 4,
+      "size": 2048,
+      "expect": "indices==[0,1,2,3]"
+    },
+    {
+      "id": "kind-echo-json",
+      "rpc": "Echo",
+      "shape": "unary",
+      "kind": "json",
+      "input": "hi",
+      "expect": "output=='echo:hi' (application/json)"
+    },
+    {
+      "id": "kind-count-json",
+      "rpc": "Count",
+      "shape": "stream",
+      "kind": "json",
+      "count": 2,
+      "expect": "indices==[0,1] over application/connect+json"
+    }
   ],
   "serverMatrix": {
     "description": "Validated once per server language by cli/raw-wire.sh (curl-only, implementation-independent). `http` is checked only when curl --http2-prior-knowledge is available.",
     "codes": {
       "description": "Every Connect code is requested through FailDetails(code) (unary) and StreamFail(code) (server-stream). unary HTTP status = httpStatus(code); stream always HTTP 200 + END-frame error.",
-      "unary": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
-      "stream": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+      "unary": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ],
+      "stream": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ],
       "expect": "unary: HTTP==httpStatus(code) and JSON body code==codeName; stream: HTTP 200 and END frame error.code==codeName"
     },
     "streamBoundaries": [
-      { "id": "boundary-0",        "rpc": "Count",      "count": 0, "expect": "no data frames (or impl default), clean END" },
-      { "id": "boundary-n",        "rpc": "Count",      "count": 5, "expect": "exactly 5 data frames then clean END" },
-      { "id": "error-0",           "rpc": "StreamFail", "emitBefore": 0, "expect": "HTTP 200, 0 data frames, END error" },
-      { "id": "error-n",           "rpc": "StreamFail", "emitBefore": 3, "expect": "HTTP 200, 3 data frames, then END error" },
-      { "id": "details-error-0",   "rpc": "StreamFailDetails", "emitBefore": 0, "expect": "END error with details, no frames" },
-      { "id": "details-error-n",   "rpc": "StreamFailDetails", "emitBefore": 2, "expect": "2 frames, then END error with details" }
+      {
+        "id": "boundary-0",
+        "rpc": "Count",
+        "count": 0,
+        "expect": "no data frames (or impl default), clean END"
+      },
+      {
+        "id": "boundary-n",
+        "rpc": "Count",
+        "count": 5,
+        "expect": "exactly 5 data frames then clean END"
+      },
+      {
+        "id": "error-0",
+        "rpc": "StreamFail",
+        "emitBefore": 0,
+        "expect": "HTTP 200, 0 data frames, END error"
+      },
+      {
+        "id": "error-n",
+        "rpc": "StreamFail",
+        "emitBefore": 3,
+        "expect": "HTTP 200, 3 data frames, then END error"
+      },
+      {
+        "id": "details-error-0",
+        "rpc": "StreamFailDetails",
+        "emitBefore": 0,
+        "expect": "END error with details, no frames"
+      },
+      {
+        "id": "details-error-n",
+        "rpc": "StreamFailDetails",
+        "emitBefore": 2,
+        "expect": "2 frames, then END error with details"
+      }
     ],
     "unexpectedRequests": [
-      { "id": "verb-get",         "request": "GET on a known unary path",     "expect": "HTTP 405" },
-      { "id": "unknown-path",     "request": "POST unknown path",             "expect": "HTTP 404, code=12" },
-      { "id": "wrong-content-type","request": "POST application/json",        "expect": "unary HTTP 415 code=2; stream HTTP 415 (no END)" },
-      { "id": "bad-version",      "request": "connect-protocol-version: 999", "expect": "unary HTTP 501 code=12; stream HTTP 400 (no END)" },
-      { "id": "bad-content-encoding","request": "Content-Encoding: br (unary)", "expect": "HTTP 501 code=12" },
-      { "id": "stream-zero-frames","request": "empty body to a server-stream", "expect": "HTTP 200, END error code=12" },
-      { "id": "stream-two-frames","request": "two enveloped frames to a server-stream", "expect": "HTTP 200, END error code=12" }
+      {
+        "id": "verb-get",
+        "request": "GET on a known unary path",
+        "expect": "HTTP 405"
+      },
+      {
+        "id": "unknown-path",
+        "request": "POST unknown path",
+        "expect": "HTTP 404, code=12"
+      },
+      {
+        "id": "wrong-content-type",
+        "request": "POST application/json",
+        "expect": "unary HTTP 415 code=2; stream HTTP 415 (no END)"
+      },
+      {
+        "id": "bad-version",
+        "request": "connect-protocol-version: 999",
+        "expect": "unary HTTP 501 code=12; stream HTTP 400 (no END)"
+      },
+      {
+        "id": "bad-content-encoding",
+        "request": "Content-Encoding: br (unary)",
+        "expect": "HTTP 501 code=12"
+      },
+      {
+        "id": "stream-zero-frames",
+        "request": "empty body to a server-stream",
+        "expect": "HTTP 200, END error code=12"
+      },
+      {
+        "id": "stream-two-frames",
+        "request": "two enveloped frames to a server-stream",
+        "expect": "HTTP 200, END error code=12"
+      }
     ],
     "malformedEnvelope": [
-      { "id": "truncated-frame-header", "request": "3-byte body to a server-stream", "expect": "HTTP 200, END error code=13" },
-      { "id": "truncated-frame",        "request": "frame declares 10 bytes, supplies 4", "expect": "HTTP 200, END error code=13" },
-      { "id": "oversize-frame",         "request": "frame length > 4 MiB", "expect": "code=8 (resource_exhausted)" },
-      { "id": "corrupt-gzip-flag",      "request": "compressed flag set, payload not gzip", "expect": "code=13, never raw bytes" }
+      {
+        "id": "truncated-frame-header",
+        "request": "3-byte body to a server-stream",
+        "expect": "HTTP 200, END error code=13"
+      },
+      {
+        "id": "truncated-frame",
+        "request": "frame declares 10 bytes, supplies 4",
+        "expect": "HTTP 200, END error code=13"
+      },
+      {
+        "id": "oversize-frame",
+        "request": "frame length > 4 MiB",
+        "expect": "code=8 (resource_exhausted)"
+      },
+      {
+        "id": "corrupt-gzip-flag",
+        "request": "compressed flag set, payload not gzip",
+        "expect": "code=13, never raw bytes"
+      }
     ],
     "limits": [
-      { "id": "oversize-request", "request": "unary body > 4 MiB", "expect": "code=8 (resource_exhausted) via HTTP 429" }
+      {
+        "id": "oversize-request",
+        "request": "unary body > 4 MiB",
+        "expect": "code=8 (resource_exhausted) via HTTP 429"
+      }
     ],
     "metadata": [
-      { "id": "multi-value-request", "request": "x-test: v1 and x-test: v2", "expect": "server observes both values (no drop/crash)" },
-      { "id": "unary-trailer",       "request": "EchoTrailer", "expect": "trailer-x-trl: unary-x response header" },
-      { "id": "stream-trailer",      "request": "CountTrailer", "expect": "END-frame metadata x-ctrailer: [done]" }
+      {
+        "id": "multi-value-request",
+        "request": "x-test: v1 and x-test: v2",
+        "expect": "server observes both values (no drop/crash)"
+      },
+      {
+        "id": "unary-trailer",
+        "request": "EchoTrailer",
+        "expect": "trailer-x-trl: unary-x response header"
+      },
+      {
+        "id": "stream-trailer",
+        "request": "CountTrailer",
+        "expect": "END-frame metadata x-ctrailer: [done]"
+      }
     ],
     "httpVersion": {
       "description": "Each transport must assert the HTTP version it actually negotiated. Per-language matrix transports: TS fetch/node/h1/auto, Go std/auto, Rust reqwest/hyper, Python std, Kotlin okhttp/cio, C# h1/h2/h3, Swift urlsession/ahc, Dart io/http2.",
       "expect": "h1 transports negotiate HTTP/1.1; h2 transports negotiate HTTP/2; h3 on QUIC; `auto` MAY upgrade but MUST report the version it used."
+    },
+    "codec": {
+      "description": "proto3 JSON codec (application/json / application/connect+json). Frame envelope unchanged; the END frame stays Connect end-stream JSON.",
+      "unary": [
+        {
+          "id": "json-echo",
+          "request": "POST application/json {\"input\":\"hi\"}",
+          "expect": "200 + {\"output\":\"echo:hi\"} + content-type application/json"
+        },
+        {
+          "id": "json-bytes",
+          "request": "EchoBytes with base64 data",
+          "expect": "round-trip byte-for-byte"
+        },
+        {
+          "id": "json-unknown-field",
+          "request": "body with an unknown field",
+          "expect": "ignored (no error)"
+        },
+        {
+          "id": "json-error",
+          "request": "FailDetails code 8",
+          "expect": "429 + JSON body code resource_exhausted"
+        }
+      ],
+      "stream": [
+        {
+          "id": "json-frame",
+          "request": "application/connect+json enveloped request",
+          "expect": "frames are JSON objects; clean END; 200"
+        }
+      ],
+      "reject": [
+        {
+          "id": "unsupported-codec",
+          "request": "application/xml",
+          "expect": "415 code 2"
+        },
+        {
+          "id": "wrong-shape",
+          "request": "application/connect+json on a unary method",
+          "expect": "415 code 2"
+        }
+      ]
     }
   },
   "cancellation": {
     "description": "Client-side local cancellation must abort the in-flight call and surface an error. Server-side deadline (connect-timeout-ms) ends unary with code=4 and streams via the END frame.",
     "cases": [
-      { "id": "client-abort-unary",  "rpc": "Sleep", "millis": 500, "abortAfterMs": 100, "expect": "error surfaced promptly; no hang" },
-      { "id": "client-abort-stream", "rpc": "BigStream", "count": 50, "abortAfterMs": 100, "expect": "iteration stops; error surfaced; no hang" },
-      { "id": "server-deadline-unary","rpc": "Sleep", "millis": 200, "timeoutMs": 50, "expect": "code=4" }
+      {
+        "id": "client-abort-unary",
+        "rpc": "Sleep",
+        "millis": 500,
+        "abortAfterMs": 100,
+        "expect": "error surfaced promptly; no hang"
+      },
+      {
+        "id": "client-abort-stream",
+        "rpc": "BigStream",
+        "count": 50,
+        "abortAfterMs": 100,
+        "expect": "iteration stops; error surfaced; no hang"
+      },
+      {
+        "id": "server-deadline-unary",
+        "rpc": "Sleep",
+        "millis": 200,
+        "timeoutMs": 50,
+        "expect": "code=4"
+      }
     ]
   }
 }

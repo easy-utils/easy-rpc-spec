@@ -184,10 +184,13 @@ req_status 405 "unexpected: GET on unary path" -X GET "$BASE/$SVC/Echo" \
   -H 'content-type: application/proto'
 req_status 404 "unexpected: unknown path" -X POST "$BASE/$SVC/Nope" \
   -H 'content-type: application/proto' --data-binary ''
-req_status 415 "unexpected: unary JSON content-type" -X POST "$BASE/$SVC/Echo" \
+# Unknown codec / wrong shape still -> 415.
+req_status 415 "unexpected: unsupported codec" -X POST "$BASE/$SVC/Echo" \
+  -H 'content-type: application/xml' --data-binary '{}'
+req_status 415 "unexpected: stream JSON on unary method" -X POST "$BASE/$SVC/Echo" \
+  -H 'content-type: application/connect+json' --data-binary '{}'
+req_status 415 "unexpected: unary JSON on stream method" -X POST "$BASE/$SVC/Count" \
   -H 'content-type: application/json' --data-binary '{}'
-req_status 415 "unexpected: stream JSON content-type" -X POST "$BASE/$SVC/Count" \
-  -H 'content-type: application/json' --data-binary ''
 req_status 501 "unexpected: bad protocol-version (unary)" -X POST "$BASE/$SVC/Echo" \
   -H 'content-type: application/proto' -H 'connect-protocol-version: 999' --data-binary ''
 req_status 501 "unexpected: bad protocol-version (stream)" -X POST "$BASE/$SVC/Count" \
@@ -284,6 +287,36 @@ curl -s -o "$TMP/ct-out.bin" -X POST "$BASE/$SVC/CountTrailer" \
   -H 'content-type: application/connect+proto' --data-binary @"$TMP/ct.bin"
 if grep -aq 'x-ctrailer' "$TMP/ct-out.bin"; then ok "metadata: stream END metadata (x-ctrailer)"
 else bad "metadata: stream END metadata missing"; fi
+
+# ---------------------------------------------------------------------------
+# 7b. JSON codec (proto3 JSON)
+# ---------------------------------------------------------------------------
+# unary JSON round-trip: {"input":"hi"} -> {"output":"echo:hi"}
+got_http="$(curl -s -o "$TMP/js.bin" -w '%{http_code}' -X POST "$BASE/$SVC/Echo" \
+  -H 'content-type: application/json' --data-binary '{"input":"hi"}')"
+if [ "$got_http" = "200" ] && grep -aq 'echo:hi' "$TMP/js.bin"; then ok "json: unary round-trip"
+else bad "json: unary round-trip (got $got_http; $(head -c 80 "$TMP/js.bin"))"; fi
+# JSON response content-type
+ctjson="$(curl -s -D - -o /dev/null -X POST "$BASE/$SVC/Echo" \
+  -H 'content-type: application/json' --data-binary '{"input":"hi"}' | tr -d '\r' | grep -i '^content-type:' | head -1)"
+case "$ctjson" in *application/json*) ok "json: response content-type application/json";; *) bad "json: response content-type ($ctjson)";; esac
+# unary JSON error body code
+curl -s -o "$TMP/jerr.bin" -w '%{http_code}' -X POST "$BASE/$SVC/FailDetails" \
+  -H 'content-type: application/json' --data-binary '{"code":8,"message":"limited","detailType":"t/x","detailText":"d"}' > "$TMP/jerr.code"
+if [ "$(cat "$TMP/jerr.code")" = "429" ] && grep -aq 'resource_exhausted' "$TMP/jerr.bin"; then ok "json: unary error 429 + code"
+else bad "json: unary error ($(cat "$TMP/jerr.code"); $(head -c 80 "$TMP/jerr.bin"))"; fi
+# stream JSON: envelope frame carrying the JSON request message
+gen_frame_json() { # <json-bytes> -> stdout (one framed envelope)
+  local n; n=$(printf '%s' "$1" | wc -c)
+  byte 0; byte $(( (n >> 24) & 255 )); byte $(( (n >> 16) & 255 )); byte $(( (n >> 8) & 255 )); byte $(( n & 255 )); printf '%s' "$1"
+}
+gen_frame_json '{"count":2}' > "$TMP/cj.bin"
+curl -s -o "$TMP/cj-out.bin" -X POST "$BASE/$SVC/Count" \
+  -H 'content-type: application/connect+json' --data-binary @"$TMP/cj.bin"
+read -r dcj ecj ncj <<< "$(frame_stats "$TMP/cj-out.bin")"
+if [ "$dcj" = "2" ] && [ "$ecj" = "1" ] && [ -z "$ncj" ]; then ok "json: stream 2 frames + clean END"
+else bad "json: stream (data=$dcj end=$ecj name=$ncj)"; fi
+if grep -aq '"index"' "$TMP/cj-out.bin"; then ok "json: stream frame is JSON"; else bad "json: stream frame is JSON"; fi
 
 # ---------------------------------------------------------------------------
 # 8. HTTP version negotiation

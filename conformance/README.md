@@ -56,8 +56,8 @@ git clone --depth 1 https://github.com/connectrpc/conformance /tmp/cconf
 bash conformance/official/run-official.sh ts       # or: go | rust | python
 ```
 
-All four server implementations currently pass **292/292** official cases
-(h1 + h2c, connect + proto, identity + gzip, unary + server-stream). Client /
+All four server implementations currently pass **564/564** official cases
+(h1 + h2c, connect + proto + proto3 JSON, identity + gzip, unary + server-stream). Client /
 bidi streaming are intentionally out of scope for easy-rpc and are excluded by
 `configs/easy-rpc-server.yaml`.
 
