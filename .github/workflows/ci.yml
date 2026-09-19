@@ -143,18 +143,18 @@ jobs:
         with: { go-version: stable }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - name: install buf + plugins
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: install buf + the unified easy-rpc plugins
         run: |
           curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-Linux-x86_64" -o /usr/local/bin/buf
           chmod +x /usr/local/bin/buf
-          mkdir -p /tmp/opencode/bin && cd /tmp/opencode/bin
-          # build the generator plugins from their repos (pinned to HEAD)
-          for repo in protoc-gen-easyrpc-ts; do
-            git clone --depth 1 "https://github.com/easy-utils/${repo}.git"
+          # One package provides all eight protoc-gen-easyrpc-<lang> plugins.
+          pip install "git+https://github.com/easy-utils/protoc-gen-easyrpc@v3.0.0"
+          mkdir -p /tmp/opencode/bin
+          for lang in ts go rust python csharp dart swift kotlin; do
+            ln -sf "$(command -v protoc-gen-easyrpc-$lang)" /tmp/opencode/bin/protoc-gen-easyrpc-$lang
           done
-          git clone --depth 1 https://github.com/easy-utils/easy-rpc-ts.git
-          cp easy-rpc-ts/bin/protoc-gen-easyrpc-ts /tmp/opencode/bin/ 2>/dev/null || \
-            (cd easy-rpc-ts && npm ci && npm run build && ln -s "$PWD/bin.js" /tmp/opencode/bin/protoc-gen-easyrpc-ts)
-      - name: golden (ts subset)
-        run: cli/golden/gen-golden.sh || true
+      - name: golden (all 8 languages)
+        run: cli/golden/gen-golden.sh
         env: { EASYRPC_BIN: /tmp/opencode/bin }
