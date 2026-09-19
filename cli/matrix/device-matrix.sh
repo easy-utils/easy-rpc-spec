@@ -12,10 +12,13 @@
 # from the worker; EASY_RPC_TRANSPORT names the transport; the worker must run
 # the language test target for that transport. Exit 0 => PASS.
 #
-# Each block below is a TEMPLATE: the worker-specific harness (Gradle/Flutter/
-# swift/xunit invocation, plus the TLS/CA setup needed for h3) is provided by the
-# worker image. This script documents the required (transport -> command) map so
-# the device runs are reproducible and never silently skipped.
+# NOTE: h3/QUIC *multiplexing* is itself testable on the Linux pod via
+#   cli/h3-concurrent.py  (aioquic client -> caddy `tls internal` IP-SAN endpoint)
+# and is wired into cli/ci/run-all.sh as the `h3` target. A self-signed CA +
+# bare IP works: the cert must carry an IP SAN (caddy `tls internal` does for a
+# site addressed by IP). Worker/device transports below need the device's own
+# trust store (Android system store for QUIC; macOS System keychain), so they
+# remain device-only.
 set -u
 DEVICE="${1:-android}"
 BASE="${EASY_RPC_BASE:-http://172.17.0.196:18888}"

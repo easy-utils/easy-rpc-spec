@@ -13,8 +13,9 @@ A shared bug in two implementations passes unless an implementation-independent
 oracle exists. That oracle is:
 
 1. `wire-vectors.json` (no transport; pure protocol bytes),
-2. `cli/raw-wire.sh` (only `curl`; the real HTTP wire), and
-3. `cli/h2-concurrent.py` (only the `h2` library; same-connection multiplexing).
+2. `cli/raw-wire.sh` (only `curl`; the real HTTP wire),
+3. `cli/h2-concurrent.py` (only the `h2` library; same-connection multiplexing), and
+4. `cli/h3-concurrent.py` (only `aioquic`; same-connection QUIC multiplexing).
 
 `cli/matrix/run-matrix.sh` then exercises every (client × transport) against
 every server, so transport-specific bugs (e.g. an h2c status-code loss) surface.
@@ -26,12 +27,17 @@ The `serverMatrix` in `checklist.json` is enforced language-independently:
 ```bash
 bash cli/raw-wire.sh http://127.0.0.1:18888 h1,h2c   # all 16 codes, boundaries, malformed, ...
 python3 cli/h2-concurrent.py 127.0.0.1 18888          # concurrent streams on one h2c connection
+# h3/QUIC: self-signed CA + IP is enough (caddy `tls internal` IP-SAN endpoint)
+python3 cli/h3-concurrent.py 172.17.0.196 18443 6 \
+  --ca /home/user/caddy-tls/data/caddy/pki/authorities/local/root.crt
 ```
 
 `raw-wire.sh` takes a second argument listing the server's supported HTTP
 versions (`h1,h2c` for Go/Rust/Python, `h1` for the Node server, which cannot
-mux h1+h2c on one socket). `cli/ci/run-all.sh rawwire h2` runs both against the
-supervisor-managed fixtures.
+mux h1+h2c on one socket). `cli/ci/run-all.sh rawwire h2 h3` runs all three
+against the supervisor-managed fixtures. The `h3` target reverse-proxies the Go
+server through the `conformance-tls` caddy instance; `EASY_RPC_H3_HOST/PORT/CA`
+override the endpoint.
 
 ## Official ConnectRPC suite
 

@@ -362,6 +362,7 @@ Response { status: int, headers: Headers, body: Bytes, trailers: Headers }
 | **故障注入** | 各语言 `fault_injection*` 测试 | 是（mock socket） | F1–F6 畸形流 body |
 | **Raw-wire oracle** | `cli/raw-wire.sh` | 否（仅 curl） | 独立于所有实现，校验真实 HTTP 线上契约：**全部 16 个 Connect code**、流边界 0/N/error、非法请求（verb/path/content-type/version/encoding）/畸形信封（截断/oversize/corrupt-gzip 标志）/limits/metadata/HTTP 版本协商 |
 | **h2 并发 oracle** | `cli/h2-concurrent.py` | 是（h2 库） | 单条 h2c 连接上并发多路 server-stream：无串扰、真正交错、流后连接可复用 |
+| **h3 并发 oracle** | `cli/h3-concurrent.py` | 是（aioquic） | 单条 QUIC 连接上并发多路 h3 server-stream：无串扰、真正交错、流后连接可复用（自签 CA + IP-SAN 即可，对 caddy `tls internal` 端点） |
 | **互通矩阵** | `cli/matrix/run-matrix.sh` | 是 | (client × transport) × (server) 全组合 |
 | **官方 ConnectRPC suite** | `conformance/official/run-official.sh` | 是 | 用 vendored 官方 proto + `connectconformance` runner 对表（可编程 `ConformanceService`），server 侧 292/292（h1+h2c、proto、identity+gzip、unary+server-stream） |
 
@@ -388,6 +389,12 @@ Response { status: int, headers: Headers, body: Bytes, trailers: Headers }
 
 设备专用 transport（Cronet/Cupertino/URLSession-h3）无法在 Linux pod 运行，见
 `cli/matrix/device-matrix.sh`（在对应 worker 上执行）。
+
+**h3/QUIC 本身可在 pod 上验证**：`cli/h3-concurrent.py`（aioquic 客户端）对
+caddy `tls internal` 的 IP-SAN 端点做单连接并发多路流；**自签 CA + IP 即可**
+（证书需含 IP SAN，caddy `tls internal` 对按 IP 寻址的站点默认如此）。
+`cli/ci/run-all.sh h3` 已接入。真正跑在设备上的 transport（Cronet/URLSession-h3）
+仍需设备信任库（Android 系统 CA / macOS System keychain），故仍归 device matrix。
 
 ### 8.3 错误路径矩阵 M1–M16
 

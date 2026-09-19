@@ -10,7 +10,7 @@
 #
 # Usage:  ./run-all.sh [lang...]     (default: all)
 #         langs: ts go rust python dart kotlin csharp swift matrix
-#                rawwire h2 vectors golden
+#                rawwire h2 h3 vectors golden
 # Exit 0 => everything green.
 set -u
 cd "$(dirname "$0")/../.."
@@ -122,6 +122,23 @@ if want_lang h2; then
     if python3 "$SPEC_ROOT/cli/h2-concurrent.py" 127.0.0.1 "$port" >"/tmp/opencode/run-all-h2-$port.log" 2>&1
     then ok "h2-concurrent-vs-$port"; else bad "h2-concurrent-vs-$port"; fi
   done
+fi
+
+# ---- h3/QUIC same-connection multiplexing oracle (aioquic only) ----
+# The QUIC endpoint is caddy `tls internal` (IP-SAN self-signed, ALPN h2+h3)
+# reverse-proxying the Go conformance server. A self-signed CA + bare IP works:
+# point --ca at caddy's local root (see conformance-tls.Caddyfile).
+if want_lang h3; then
+  H3_HOST="${EASY_RPC_H3_HOST:-172.17.0.196}"
+  H3_PORT="${EASY_RPC_H3_PORT:-18443}"
+  H3_CA="${EASY_RPC_H3_CA:-/home/user/caddy-tls/data/caddy/pki/authorities/local/root.crt}"
+  if [ -f "$H3_CA" ]; then
+    if python3 "$SPEC_ROOT/cli/h3-concurrent.py" "$H3_HOST" "$H3_PORT" 6 --ca "$H3_CA" \
+      >"/tmp/opencode/run-all-h3.log" 2>&1
+    then ok "h3-concurrent-vs-$H3_HOST:$H3_PORT"; else bad "h3-concurrent-vs-$H3_HOST:$H3_PORT"; fi
+  else
+    skip "h3 (no CA at $H3_CA)"
+  fi
 fi
 
 # ---- wire golden vectors (transport-independent protocol conformance) ----
